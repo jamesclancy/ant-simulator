@@ -35,7 +35,6 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: android-actions/setup-android@v3
       - run: pnpm install --frozen-lockfile
       - run: pnpm mobile:sync
       - name: Android debug build
