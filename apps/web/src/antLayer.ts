@@ -17,6 +17,12 @@ export class AntLayer {
   private arrived = performance.now();
   private tickMs = TICK_MS;
   private shown = 0;
+  private playerIndex = -1;
+  private lastStyled = -1;
+  private recruitFlags = new Uint8Array(0);
+  private recruitIdx: Uint32Array = new Uint32Array(0);
+  /** Interpolated position of the player ant after the latest `update()`, if any. */
+  readonly playerPos = { x: 0, y: 0, valid: false };
 
   constructor(renderer: Renderer, parent: Container) {
     const g = new Graphics();
@@ -37,7 +43,20 @@ export class AntLayer {
     this.curr = snapshot.ants;
     this.currCount = snapshot.antCount;
     this.arrived = performance.now();
+    this.trackPlayer(snapshot);
     this.tickMs = speed > 0 ? TICK_MS / speed : Infinity;
+  }
+
+  /** Remember which ants are the player and its recruits, for styling in `update()`. */
+  private trackPlayer(snapshot: Snapshot): void {
+    for (const i of this.recruitIdx) this.recruitFlags[i] = 0;
+    const p = snapshot.player;
+    this.playerIndex = p ? p.index : -1;
+    this.recruitIdx = p ? p.recruitedIndices : new Uint32Array(0);
+    if (this.recruitFlags.length < snapshot.antCount) {
+      this.recruitFlags = new Uint8Array(Math.ceil(snapshot.antCount * 1.5));
+    }
+    for (const i of this.recruitIdx) if (i < this.recruitFlags.length) this.recruitFlags[i] = 1;
   }
 
   update(): void {
@@ -81,6 +100,23 @@ export class AntLayer {
       p.rotation = curr[o + 2]!;
       // Carrying ants are tinted gold.
       p.tint = curr[o + 3]! > 0 ? 0xffc21a : 0x151515;
+      if (this.recruitFlags[i]) p.tint = 0x8a6a10;
+    }
+    const pi = this.playerIndex;
+    if (this.lastStyled >= 0 && this.lastStyled !== pi && this.lastStyled < n) {
+      const old = list[this.lastStyled]!;
+      old.alpha = 1;
+    }
+    this.lastStyled = -1;
+    this.playerPos.valid = false;
+    if (pi >= 0 && pi < n) {
+      const p = list[pi]!;
+      // The player is drawn by PlayerMarker (bigger, yellow); hide its particle.
+      p.alpha = 0;
+      this.playerPos.x = p.x;
+      this.playerPos.y = p.y;
+      this.playerPos.valid = true;
+      this.lastStyled = pi;
     }
   }
 }

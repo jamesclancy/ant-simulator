@@ -37,6 +37,7 @@ export function runSimWorker(scope: WorkerScope): void {
     if (wantScent) lastScentTick = sim.tick;
     const snapshot = sim.snapshot({ pheromones: wantScent });
     const transfer: Transferable[] = [snapshot.ants.buffer];
+    if (snapshot.player) transfer.push(snapshot.player.recruitedIndices.buffer);
     if (snapshot.pheromones) transfer.push(snapshot.pheromones.data.buffer);
     scope.postMessage({ type: 'snapshot', snapshot, speed: paused ? 0 : speed }, transfer);
   };

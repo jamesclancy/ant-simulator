@@ -33,6 +33,8 @@ export function updateAnts(
   rng: Rng,
   cfg: AntBehaviorConfig,
   tickRate: number,
+  /** Ant index driven by the player controller instead of this loop (-1 = none). */
+  playerIndex = -1,
 ): void {
   const { x, y, heading, carrying, state, strength } = ants;
   const { food, nest } = world;
@@ -58,6 +60,8 @@ export function updateAnts(
   const homingBias = cfg.homingBias;
 
   for (let i = 0; i < ants.count; i++) {
+    // The player ant and its recruits are moved by the player controller.
+    if (i === playerIndex || state[i] === AntState.Recruited) continue;
     let px = x[i]!;
     let py = y[i]!;
     let h = heading[i]!;

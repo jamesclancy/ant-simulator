@@ -21,6 +21,20 @@
         <span id="stats"></span>
       </div>
     </div>
+    <div id="player-hud">
+      <div class="bar" role="group" aria-label="Player ant">
+        <button id="p-trail" type="button" aria-pressed="false" title="Lay trail (hold Shift)">
+          Trail
+        </button>
+        <button id="p-pickup" type="button" title="Pick up / drop (E)">Pick up</button>
+        <button id="p-recruit5" type="button" title="Recruit 5 (R)">Recruit 5</button>
+        <button id="p-recruit10" type="button">Recruit 10</button>
+        <button id="p-release" type="button" disabled>Release</button>
+        <button id="p-follow" type="button" aria-pressed="true">Follow</button>
+        <span id="p-status"></span>
+      </div>
+    </div>
+    <div id="toast" role="status"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
