@@ -21,3 +21,23 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: pnpm bench
+
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm mobile:sync
+      - name: Android debug build
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleDebug --no-daemon

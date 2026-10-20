@@ -3,3 +3,5 @@ dist
 pnpm-lock.yaml
 docs/PLAN.md
 .claude
+apps/mobile/ios
+apps/mobile/android
