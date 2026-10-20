@@ -108,7 +108,36 @@ export type Command =
   | { type: 'placeFood'; x: number; y: number; amount: number }
   | { type: 'removeFood'; id: number }
   /** Live-tune behaviour parameters (merged over the current values). */
-  | { type: 'setBehavior'; params: Partial<AntBehaviorConfig> };
+  | { type: 'setBehavior'; params: Partial<AntBehaviorConfig> }
+  /** Walk the player ant to a world point (stops on arrival). Clears any held direction. */
+  | { type: 'playerMoveTo'; x: number; y: number }
+  /** Hold a direction (joystick / WASD); magnitude 0..1 scales speed. Zero stops it. */
+  | { type: 'playerMoveDir'; dx: number; dy: number }
+  | { type: 'playerToggleTrail'; on: boolean }
+  /** Pick up food from a nearby pile, or drop what is carried (at the nest: into the colony store). */
+  | { type: 'playerPickupDrop' }
+  /** Recruit the nearest idle ants to follow the player. */
+  | { type: 'playerRecruit'; count: 5 | 10 }
+  /** Release all recruited ants back to normal foraging. */
+  | { type: 'playerRelease' };
+
+/** One-shot notifications from the sim, delivered in the snapshot of the tick they happened. */
+export type SimEvent = { type: 'playerSwapped'; from: number; to: number };
+
+/** The player-controlled (yellow) ant. */
+export interface PlayerInfo {
+  /** Index into the snapshot `ants` buffer. */
+  index: number;
+  x: number;
+  y: number;
+  heading: number;
+  carrying: number;
+  trail: boolean;
+  /** Number of ants currently following the player. */
+  recruits: number;
+  /** Ant indices of the recruited ants (length === recruits). Transferable. */
+  recruitedIndices: Uint32Array;
+}
 
 /** Quantized pheromone layers, `layers.length * resolution^2` bytes, layer-major then row-major. */
 export interface PheromoneSnapshot {
@@ -131,6 +160,9 @@ export interface Snapshot {
   nest: NestInfo;
   /** Food in the colony store. */
   colonyFood: number;
+  /** The player ant, or null when the colony has no ants. */
+  player: PlayerInfo | null;
+  events: SimEvent[];
 }
 
 /** Main thread -> worker. */

@@ -30,6 +30,13 @@ export class Camera {
     this.world.position.set(r.width / 2 - wx * zoom, r.height / 2 - wy * zoom);
   }
 
+  /** Pan so a world point is at the centre of the view, keeping the current zoom. */
+  centerOn(wx: number, wy: number): void {
+    const r = this.el.getBoundingClientRect();
+    const z = this.world.scale.x;
+    this.world.position.set(r.width / 2 - wx * z, r.height / 2 - wy * z);
+  }
+
   private zoomAt(sx: number, sy: number, factor: number): void {
     const old = this.world.scale.x;
     const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, old * factor));

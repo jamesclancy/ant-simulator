@@ -17,6 +17,7 @@ import type { Command, SimConfig, SimConfigInput, Snapshot } from '@ant/shared';
 import { createAntStore, updateAnts } from './ants';
 import type { AntStore } from './ants';
 import { PheromoneField } from './pheromones';
+import { PlayerController, isPlayerCommand } from './player';
 import { createRng } from './rng';
 import { createWorld } from './world';
 import type { World } from './world';
@@ -29,6 +30,8 @@ export interface Sim {
   readonly pheromones: PheromoneField;
   /** Food piles and the nest. */
   readonly world: World;
+  /** The yellow player ant and its recruits. */
+  readonly player: PlayerController;
   applyCommands(commands: readonly Command[]): void;
   /** Advance exactly one fixed tick. */
   step(): void;
@@ -83,6 +86,15 @@ export function createSim(partial: SimConfigInput = {}): Sim {
 
   const half = config.worldSize / 2;
   spawn(config.initialAnts, half, half, config.worldSize * 0.15);
+  const player = new PlayerController(
+    ants,
+    world,
+    pheromones,
+    config.behavior,
+    rng,
+    config.worldSize,
+  );
+  player.reset();
 
   return {
     config,
@@ -92,14 +104,20 @@ export function createSim(partial: SimConfigInput = {}): Sim {
     ants,
     pheromones,
     world,
+    player,
     applyCommands(commands) {
       for (const cmd of commands) {
+        if (isPlayerCommand(cmd)) {
+          player.apply(cmd);
+          continue;
+        }
         switch (cmd.type) {
           case 'spawnAnts':
             spawn(cmd.count, cmd.x, cmd.y, 20);
             break;
           case 'clearAnts':
             ants.count = 0;
+            player.reset();
             break;
           case 'depositPheromone':
             if (pheromones.has(cmd.pheromone)) {
@@ -122,7 +140,8 @@ export function createSim(partial: SimConfigInput = {}): Sim {
       }
     },
     step() {
-      updateAnts(ants, pheromones, world, rng, config.behavior, config.tickRate);
+      updateAnts(ants, pheromones, world, rng, config.behavior, config.tickRate, player.index);
+      player.step();
       pheromones.update();
       tick++;
     },
@@ -148,6 +167,8 @@ export function createSim(partial: SimConfigInput = {}): Sim {
         })),
         nest: { x: world.nest.x, y: world.nest.y, radius: world.nest.radius },
         colonyFood: world.nest.store,
+        player: player.info(),
+        events: player.drainEvents(),
       };
       if (options?.pheromones ?? tick % PHEROMONE_SNAPSHOT_INTERVAL === 0) {
         snap.pheromones = {

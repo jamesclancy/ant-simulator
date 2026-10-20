@@ -72,3 +72,69 @@ button[aria-pressed='true'] {
   font-variant-numeric: tabular-nums;
   opacity: 0.8;
 }
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+#player-hud {
+  position: fixed;
+  left: var(--sal);
+  right: var(--sar);
+  top: var(--sat);
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  pointer-events: none;
+}
+#p-trail[aria-pressed='true'],
+#p-follow[aria-pressed='true'] {
+  background: #ffd400;
+}
+#p-status {
+  padding: 0 8px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+#toast {
+  position: fixed;
+  left: 50%;
+  top: calc(var(--sat) + 90px);
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 75%);
+  color: #ffe600;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+#toast.show {
+  opacity: 1;
+}
+#joystick {
+  position: fixed;
+  left: calc(var(--sal) + 24px);
+  bottom: calc(var(--sab) + 96px);
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 30%);
+  border: 2px solid rgb(255 230 0 / 45%);
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#joystick-knob {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgb(255 230 0 / 75%);
+  pointer-events: none;
+}
+@media (max-width: 600px) {
+  #joystick {
+    bottom: calc(var(--sab) + 180px);
+  }
+}

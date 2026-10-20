@@ -7,6 +7,8 @@ import { WorldLayer } from './worldLayer';
 import { SimClient } from './simClient';
 import { pauseWhenBackgrounded } from './lifecycle';
 import { mountTuningPanel } from './tuningPanel';
+import { PlayerInput } from './player/input';
+import { PlayerMarker } from './player/marker';
 
 async function main(): Promise<void> {
   const host = document.getElementById('app')!;
@@ -27,6 +29,8 @@ async function main(): Promise<void> {
   let scent: ScentOverlay | null = null;
   let scentOn = false;
   let worldLayer: WorldLayer | null = null;
+  let marker: PlayerMarker | null = null;
+  let playerNow: { x: number; y: number; heading: number; carrying: boolean } | null = null;
   let stats = { tick: 0, count: 0, food: 0 };
 
   const sim = new SimClient({
@@ -42,6 +46,7 @@ async function main(): Promise<void> {
       scent.setVisible(scentOn);
       worldLayer = new WorldLayer(world);
       ants = new AntLayer(app.renderer, world);
+      marker = new PlayerMarker(world);
       camera.focus(config.worldSize / 2, config.worldSize / 2, 1.5);
       if (new URLSearchParams(location.search).has('debug')) {
         mountTuningPanel(sim, config.behavior);
@@ -50,13 +55,34 @@ async function main(): Promise<void> {
     onSnapshot(snapshot, speed) {
       worldLayer?.update(snapshot);
       ants?.push(snapshot, speed);
+      const pl = snapshot.player;
+      playerNow = pl && { x: pl.x, y: pl.y, heading: pl.heading, carrying: pl.carrying > 0 };
+      playerInput.onSnapshot(pl, snapshot.events);
       if (snapshot.pheromones) scent?.update(snapshot.pheromones);
       stats = { tick: snapshot.tick, count: snapshot.antCount, food: snapshot.colonyFood };
     },
   });
   sim.init();
 
-  app.ticker.add(() => ants?.update());
+  const toWorld = (cx: number, cy: number): { x: number; y: number } => {
+    const r = host.getBoundingClientRect();
+    return world.toLocal({ x: cx - r.left, y: cy - r.top });
+  };
+  let placing = false;
+  const playerInput = new PlayerInput({
+    host,
+    send: (commands) => sim.sendCommands(commands),
+    toWorld,
+    toolActive: () => placing,
+    onTarget: (x, y) => marker?.showTarget(x, y),
+  });
+
+  app.ticker.add(() => {
+    ants?.update();
+    const pos = ants?.playerPos.valid ? ants.playerPos : null;
+    marker?.update(pos, playerNow?.heading ?? 0, playerNow?.carrying ?? false, camera.zoom);
+    if (pos && playerInput.follow) camera.centerOn(pos.x, pos.y);
+  });
 
   // HUD
   const pause = document.getElementById('pause')!;
@@ -98,7 +124,6 @@ async function main(): Promise<void> {
   refresh();
   // Place-food tool: when on, a tap/click (not a drag) places a pile at that world point.
   const foodTool = document.getElementById('place-food')!;
-  let placing = false;
   foodTool.addEventListener('click', () => {
     placing = !placing;
     foodTool.setAttribute('aria-pressed', String(placing));
@@ -111,8 +136,7 @@ async function main(): Promise<void> {
     const d = down;
     down = null;
     if (!placing || !d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6) return;
-    const r = host.getBoundingClientRect();
-    const p = world.toLocal({ x: e.clientX - r.left, y: e.clientY - r.top });
+    const p = toWorld(e.clientX, e.clientY);
     sim.sendCommands([{ type: 'placeFood', x: p.x, y: p.y, amount: 200 }]);
   });
 
