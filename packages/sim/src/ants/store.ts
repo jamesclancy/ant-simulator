@@ -16,11 +16,34 @@ export interface AntStore {
    * then multiplied by `depositDecay` every tick. Scales pheromone deposits.
    */
   strength: Float32Array;
-  /** 0 = surface, 1 = underground (nest grid space). */
+  /** 0 = surface, `1 + c` = underground in colony c's nest (nest grid space). */
   layer: Uint8Array;
-  /** `AntRole` value: the job the colony wants this ant doing. */
+  /** `AntRole` value: the job the colony wants this (worker) ant doing. */
   role: Uint8Array;
+  /** Owning colony id. */
+  colony: Uint8Array;
+  /** `Caste` value. */
+  caste: Uint8Array;
+  /** Hit points; the ant is removed at the end of the tick once this is <= 0. */
+  hp: Float32Array;
 }
+
+/** `hp` marker for ants that starved: removed without leaving a corpse. */
+export const STARVED_HP = -1e9;
+
+const FIELDS = [
+  'x',
+  'y',
+  'heading',
+  'carrying',
+  'state',
+  'strength',
+  'layer',
+  'role',
+  'colony',
+  'caste',
+  'hp',
+] as const;
 
 export function createAntStore(capacity: number): AntStore {
   return {
@@ -34,6 +57,9 @@ export function createAntStore(capacity: number): AntStore {
     strength: new Float32Array(capacity),
     layer: new Uint8Array(capacity),
     role: new Uint8Array(capacity),
+    colony: new Uint8Array(capacity),
+    caste: new Uint8Array(capacity),
+    hp: new Float32Array(capacity),
   };
 }
 
@@ -41,14 +67,42 @@ export function createAntStore(capacity: number): AntStore {
 export function removeAnt(ants: AntStore, i: number): void {
   const last = --ants.count;
   if (i === last) return;
-  ants.x[i] = ants.x[last]!;
-  ants.y[i] = ants.y[last]!;
-  ants.heading[i] = ants.heading[last]!;
-  ants.carrying[i] = ants.carrying[last]!;
-  ants.state[i] = ants.state[last]!;
-  ants.strength[i] = ants.strength[last]!;
-  ants.layer[i] = ants.layer[last]!;
-  ants.role[i] = ants.role[last]!;
+  for (const f of FIELDS) ants[f][i] = ants[f][last]!;
+}
+
+/**
+ * Remove every ant with `hp <= 0`, keeping the survivors in their original order (so the
+ * renderer's per-index interpolation and any held index stays meaningful once remapped).
+ * Fills `remap[old] = new index` (or -1 for removed ants) for `old < previous count` and
+ * returns the number removed. Allocation-free; `remap` must hold `ants.count` entries.
+ */
+export function compactAnts(ants: AntStore, remap: Int32Array): number {
+  const n = ants.count;
+  const { x, y, heading, carrying, state, strength, layer, role, colony, caste, hp } = ants;
+  let w = 0;
+  for (let r = 0; r < n; r++) {
+    if (hp[r]! <= 0) {
+      remap[r] = -1;
+      continue;
+    }
+    if (w !== r) {
+      // Explicit copies: this runs every tick during battles, keep it monomorphic.
+      x[w] = x[r]!;
+      y[w] = y[r]!;
+      heading[w] = heading[r]!;
+      carrying[w] = carrying[r]!;
+      state[w] = state[r]!;
+      strength[w] = strength[r]!;
+      layer[w] = layer[r]!;
+      role[w] = role[r]!;
+      colony[w] = colony[r]!;
+      caste[w] = caste[r]!;
+      hp[w] = hp[r]!;
+    }
+    remap[r] = w++;
+  }
+  ants.count = w;
+  return n - w;
 }
 
 export { MAX_ANTS };

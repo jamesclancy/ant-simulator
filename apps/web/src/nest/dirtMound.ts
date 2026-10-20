@@ -2,21 +2,26 @@ import { Graphics } from 'pixi.js';
 import type { Container } from 'pixi.js';
 import type { Snapshot } from '@ant/shared';
 
-/** Surface dirt heap beside the nest entrance; grows with the dirt diggers have hauled out. */
+/** Surface dirt heap beside a colony's nest entrance; grows with the dirt hauled out. */
 export class DirtMound {
   private g = new Graphics();
   private shown = -1;
 
-  constructor(parent: Container) {
+  constructor(
+    parent: Container,
+    private colony: number,
+  ) {
     parent.addChild(this.g);
   }
 
   update(snapshot: Snapshot): void {
-    const dirt = snapshot.colony.dirt;
+    const c = snapshot.colonies[this.colony];
+    if (!c) return;
+    const dirt = c.dirt;
     const bucket = Math.floor(Math.sqrt(dirt) * 2);
     if (bucket === this.shown) return;
     this.shown = bucket;
-    const { x, y, radius } = snapshot.nest;
+    const { x, y, radius } = c.nest;
     const r = Math.min(radius * 1.2, 4 + bucket * 0.9);
     this.g.clear();
     if (dirt <= 0) return;

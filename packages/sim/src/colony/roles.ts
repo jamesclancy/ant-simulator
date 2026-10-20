@@ -1,4 +1,4 @@
-import { AntRole } from '@ant/shared';
+import { AntRole, Caste } from '@ant/shared';
 import type { BehaviorRatio } from '@ant/shared';
 import type { AntStore } from '../ants/store';
 
@@ -53,25 +53,34 @@ export function roleTargets(total: number, ratio: BehaviorRatio, out: number[]):
 }
 
 /**
- * Move idle ants (not carrying anything) from over-quota roles to under-quota ones, in
- * index order so the result is deterministic. Ants mid-task keep their role. Fills `have`
- * with the resulting per-role counts.
+ * Move idle workers of `colony` (not carrying anything) from over-quota roles to
+ * under-quota ones, in index order so the result is deterministic. Ants mid-task keep their
+ * role; soldiers and breeders have no role. Fills `have` with the resulting per-role counts.
  */
 export function rebalanceRoles(
   ants: AntStore,
+  colony: number,
   ratio: BehaviorRatio,
   have: number[],
   target: number[],
 ): void {
+  const { role, caste, carrying } = ants;
+  const owner = ants.colony;
   have[0] = have[1] = have[2] = 0;
-  for (let i = 0; i < ants.count; i++) have[ants.role[i]!]!++;
-  roleTargets(ants.count, ratio, target);
+  let workers = 0;
   for (let i = 0; i < ants.count; i++) {
-    const r = ants.role[i]!;
-    if (have[r]! <= target[r]! || ants.carrying[i] !== 0) continue;
+    if (owner[i] !== colony || caste[i] !== Caste.Worker) continue;
+    have[role[i]!]!++;
+    workers++;
+  }
+  roleTargets(workers, ratio, target);
+  for (let i = 0; i < ants.count; i++) {
+    if (owner[i] !== colony || caste[i] !== Caste.Worker) continue;
+    const r = role[i]!;
+    if (have[r]! <= target[r]! || carrying[i] !== 0) continue;
     const to = mostNeededRole(have, target);
     if (to < 0) break;
-    ants.role[i] = to;
+    role[i] = to;
     have[r]!--;
     have[to]!++;
   }

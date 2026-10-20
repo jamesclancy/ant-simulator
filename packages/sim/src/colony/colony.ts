@@ -1,14 +1,16 @@
-import { AntRole, AntState, NEST_TILE } from '@ant/shared';
+import { AntRole, AntState, Caste, NEST_TILE, undergroundLayer } from '@ant/shared';
 import type {
   AntBehaviorConfig,
   BehaviorRatio,
   CasteRatio,
   ColonyConfig,
   ColonySnapshot,
+  CombatConfig,
   NestGridSnapshot,
+  SimEvent,
 } from '@ant/shared';
 import type { AntStore } from '../ants/store';
-import { removeAnt } from '../ants/store';
+import { STARVED_HP } from '../ants/store';
 import { createRng } from '../rng';
 import type { Rng } from '../rng';
 import type { Nest } from '../world/nest';
@@ -25,39 +27,54 @@ const REBALANCE_INTERVAL = 10;
 export interface ColonyOptions {
   id: number;
   config: ColonyConfig;
+  combat: CombatConfig;
   nest: Nest;
   /** Seeds the nest layout and dig plan. Independent of the ant rng. */
   seed: number;
   /** Where the queen chamber sits is derived from the grid; the entrance column defaults to centre. */
   grid?: NestGrid;
+  /** Receives one-shot events (queen death). */
+  onEvent?: (e: SimEvent) => void;
 }
 
 /**
  * One ant colony: its underground nest (tile grid, flow fields, dig plan), brood, queen
- * and economy. Everything is keyed off `id` and holds its own state, so a second (rival)
- * colony is just another instance with its own `Nest` and `AntStore` role/layer slots.
+ * and economy. All colonies share one `AntStore`; an ant belongs to colony `ants.colony[i]`,
+ * and is inside this colony's nest when `ants.layer[i] === undergroundLayer(id)` (which
+ * includes enemy raiders).
  *
- * Per tick (`step`): rebalance roles -> refresh flow fields -> move underground ants ->
- * complete digging -> queen lays -> brood develops (nurses speed it up) -> upkeep/starvation.
+ * Per-tick head counts (`population`, `castes`, `intruders`, ...) are filled in by
+ * `takeCensus` before `step` runs.
+ *
+ * Per tick (`step`): rebalance roles -> refresh flow fields -> move ants in the nest
+ * (own and raiders) -> complete digging -> queen lays -> brood develops (nurses speed it
+ * up; pupae emerge as workers/soldiers/breeders per `casteRatio`) -> upkeep/starvation.
  */
 export class Colony {
   readonly id: number;
   readonly config: ColonyConfig;
+  readonly combat: CombatConfig;
   readonly nest: Nest;
   readonly grid: NestGrid;
   readonly brood = new Brood();
+  /** `ants.layer` value of ants inside this nest. */
+  readonly layer: number;
 
   // Flow fields (walking distance to the thing named).
   readonly toEntrance: FlowField;
   readonly toFood: FlowField;
   readonly toNursery: FlowField;
   readonly toDig: FlowField;
+  readonly toQueen: FlowField;
   private fieldsVersion = -1;
   private planner: DigPlanner;
 
   ratio: BehaviorRatio;
   casteRatio: CasteRatio;
+  /** Soldiers raid the enemy nest instead of patrolling near home. */
+  raid = false;
   queenAlive = true;
+  queenHp: number;
   lost = false;
   readonly queenTile: number;
   /** Dirt hauled out of the nest (drives the surface mound). */
@@ -71,6 +88,20 @@ export class Colony {
   lastDigger = -1;
   nursesTending = 0;
 
+  // Census (see `takeCensus`), refreshed every tick.
+  population = 0;
+  readonly castes: [number, number, number] = [0, 0, 0];
+  underground = 0;
+  fighting = 0;
+  /** Enemy ants inside this nest. */
+  intruders = 0;
+  /** Enemy surface ants within `threatRadius` of the entrance. */
+  threat = 0;
+  /** An enemy ant has been within `scoutRadius` of the entrance (sticky). */
+  scouted = false;
+  /** Ants lost so far (combat + starvation). Updated by the sim when ants are removed. */
+  losses = 0;
+
   // Economy state.
   private layProgress = 0;
   private starveProgress = 0;
@@ -79,18 +110,19 @@ export class Colony {
   nursing = 1;
   readonly roleCount: number[] = [0, 0, 0];
   private roleTarget: number[] = [0, 0, 0];
-  private nextBroodKey = 0;
   /** Index of an ant that must not starve (the player ant), or -1. */
   protectedIndex: () => number = () => -1;
-  /** Called when swap-removal moves an ant from `from` to slot `to`. */
-  onAntMoved: (from: number, to: number) => void = () => {};
+  private onEvent: (e: SimEvent) => void;
   private lastSentVersion = -1;
   private tick = 0;
 
   constructor(opts: ColonyOptions) {
     this.id = opts.id;
+    this.layer = undergroundLayer(opts.id);
     this.config = opts.config;
+    this.combat = opts.combat;
     this.nest = opts.nest;
+    this.onEvent = opts.onEvent ?? (() => {});
     const rng = createRng(opts.seed ^ Math.imul(opts.id + 1, 0x85ebca6b));
     this.grid = opts.grid ?? new NestGrid();
     this.grid.generate(rng);
@@ -99,9 +131,11 @@ export class Colony {
     this.toFood = new FlowField(this.grid);
     this.toNursery = new FlowField(this.grid);
     this.toDig = new FlowField(this.grid);
+    this.toQueen = new FlowField(this.grid);
     this.ratio = normaliseRatio(opts.config.behaviorRatio);
-    this.casteRatio = { ...opts.config.casteRatio };
+    this.casteRatio = normaliseCaste(opts.config.casteRatio);
     this.queenTile = this.grid.idx(this.grid.entranceX, 9);
+    this.queenHp = opts.combat.queenHp;
     this.nest.store = opts.config.startFood;
   }
 
@@ -118,9 +152,16 @@ export class Colony {
     this.ratio = normaliseRatio(r);
   }
 
-  /** A surface ant at the entrance goes underground, keeping whatever it carries. */
+  setCasteRatio(r: CasteRatio): void {
+    this.casteRatio = normaliseCaste(r);
+  }
+
+  /**
+   * A surface ant at this nest's entrance goes underground, keeping whatever it carries.
+   * Enemy raiders enter the same way.
+   */
   enter(ants: AntStore, i: number): void {
-    ants.layer[i] = 1;
+    ants.layer[i] = this.layer;
     ants.x[i] = this.entranceX;
     ants.y[i] = NEST_TILE * 0.5;
     ants.heading[i] = Math.PI / 2;
@@ -157,7 +198,7 @@ export class Colony {
   step(ants: AntStore, rng: Rng, cfg: AntBehaviorConfig, tickRate: number): void {
     const c = this.config;
     if (this.tick % REBALANCE_INTERVAL === 0) {
-      rebalanceRoles(ants, this.ratio, this.roleCount, this.roleTarget);
+      rebalanceRoles(ants, this.id, this.ratio, this.roleCount, this.roleTarget);
     }
     this.tick++;
     this.refreshFields();
@@ -184,6 +225,7 @@ export class Colony {
       this.toEntrance.rebuild([g.entranceIndex]);
       this.toFood.rebuild(g.foodTiles);
       this.toNursery.rebuild(g.nurseryTiles);
+      this.toQueen.rebuild(g.queenTiles);
       this.toDig.dirty = true;
     }
     const full = g.openCount >= g.size * this.config.maxOpenFraction;
@@ -268,7 +310,21 @@ export class Colony {
     b.pupae = pupae;
   }
 
-  /** A pupa emerges as an adult worker in a nursery chamber. */
+  /** Caste for the next adult: the one furthest below its `casteRatio` share. */
+  nextCaste(): number {
+    const total = this.population + 1;
+    const r = this.casteRatio;
+    const gaps = [
+      r.worker * total - this.castes[0],
+      r.soldier * total - this.castes[1],
+      r.breeder * total - this.castes[2],
+    ];
+    let best = 0;
+    for (let k = 1; k < 3; k++) if (gaps[k]! > gaps[best]!) best = k;
+    return best;
+  }
+
+  /** A pupa emerges as an adult in a nursery chamber, with its caste from `casteRatio`. */
   private hatch(ants: AntStore, rng: Rng): void {
     if (ants.count >= ants.capacity) return;
     const tiles = this.grid.nurseryTiles;
@@ -277,23 +333,33 @@ export class Colony {
     const tx = tile % w;
     const ty = (tile - tx) / w;
     const i = ants.count++;
-    ants.layer[i] = 1;
+    const caste = this.nextCaste();
+    ants.layer[i] = this.layer;
     ants.x[i] = (tx + rng.next()) * NEST_TILE;
     ants.y[i] = (ty + rng.next()) * NEST_TILE;
     ants.heading[i] = rng.range(0, Math.PI * 2);
     ants.carrying[i] = 0;
     ants.strength[i] = 0;
-    const total = ants.count;
-    roleTargets(total, this.ratio, this.roleTarget);
-    const role = Math.max(0, mostNeededRole(this.roleCount, this.roleTarget));
+    ants.colony[i] = this.id;
+    ants.caste[i] = caste;
+    ants.hp[i] = this.combat.hp[caste]!;
+    this.population++;
+    this.castes[caste]!++;
+    let role: number = AntRole.Forage;
+    if (caste === Caste.Breeder) role = AntRole.Nurse;
+    else if (caste === Caste.Worker) {
+      roleTargets(this.castes[0], this.ratio, this.roleTarget);
+      role = Math.max(0, mostNeededRole(this.roleCount, this.roleTarget));
+      this.roleCount[role]!++;
+    }
     ants.role[i] = role;
-    this.roleCount[role]!++;
     ants.state[i] = roleState(role);
   }
 
   private upkeep(ants: AntStore, rng: Rng): void {
     const c = this.config;
-    const need = ants.count * c.upkeepPerAnt + (this.queenAlive ? c.queenUpkeep : 0);
+    const pop = this.population;
+    const need = pop * c.upkeepPerAnt + (this.queenAlive ? c.queenUpkeep : 0);
     if (this.nest.store >= need) {
       this.nest.store -= need;
       this.hunger = 0;
@@ -302,49 +368,69 @@ export class Colony {
     }
     this.nest.store = 0;
     this.hunger++;
-    this.starveProgress += ants.count * c.starveRate;
-    while (this.starveProgress >= 1 && ants.count > 0) {
+    this.starveProgress += pop * c.starveRate;
+    const keep = this.protectedIndex();
+    const { colony, hp } = ants;
+    const n = ants.count;
+    while (this.starveProgress >= 1 && n > 0) {
       this.starveProgress -= 1;
-      let victim = rng.int(ants.count);
-      const keep = this.protectedIndex();
-      if (victim === keep) {
-        if (ants.count < 2) break;
-        victim = (victim + 1) % ants.count;
+      // Random start, then the next living ant of this colony (deterministic probe).
+      const start = rng.int(n);
+      for (let k = 0; k < n; k++) {
+        const v = (start + k) % n;
+        if (colony[v] !== this.id || hp[v]! <= 0 || v === keep) continue;
+        hp[v] = STARVED_HP; // removed (no corpse) at the end of the tick
+        break;
       }
-      const last = ants.count - 1;
-      removeAnt(ants, victim);
-      if (last !== victim) this.onAntMoved(last, victim);
     }
-    if (this.queenAlive && this.hunger >= c.queenStarveTicks) this.killQueen();
+    if (this.queenAlive && this.hunger >= c.queenStarveTicks) this.killQueen('starvation');
+  }
+
+  /** Raiders hurt the queen; at 0 HP she dies. */
+  damageQueen(amount: number): void {
+    if (!this.queenAlive) return;
+    this.queenHp -= amount;
+    if (this.queenHp <= 0) {
+      this.queenHp = 0;
+      this.killQueen('combat');
+    }
   }
 
   /** Queen death: no more eggs; the colony is lost. */
-  killQueen(): void {
+  killQueen(cause: 'combat' | 'starvation' = 'starvation'): void {
+    if (!this.queenAlive) return;
     this.queenAlive = false;
+    this.queenHp = 0;
     this.lost = true;
+    this.onEvent({ type: 'queenKilled', colony: this.id, cause });
   }
 
-  /** Per-colony slice of a snapshot. Counts roles and layers over the ant store. */
-  snapshotColony(ants: AntStore): ColonySnapshot {
-    const roles: [number, number, number] = [0, 0, 0];
-    let underground = 0;
-    for (let i = 0; i < ants.count; i++) {
-      roles[ants.role[i]!]!++;
-      underground += ants.layer[i]!;
-    }
+  /** Per-colony slice of a snapshot, from the latest census. */
+  snapshotColony(): ColonySnapshot {
     const w = this.grid.width;
     return {
       id: this.id,
+      nest: { x: this.nest.x, y: this.nest.y, radius: this.nest.radius },
+      food: this.nest.store,
       queenAlive: this.queenAlive,
+      queenHp: this.queenHp,
+      queenMaxHp: this.combat.queenHp,
       queenX: this.queenTile % w,
       queenY: Math.floor(this.queenTile / w),
       lost: this.lost,
       eggs: this.brood.eggs,
       larvae: this.brood.larvae,
       pupae: this.brood.pupae,
-      population: ants.count,
-      underground,
-      roles,
+      population: this.population,
+      underground: this.underground,
+      castes: [this.castes[0], this.castes[1], this.castes[2]],
+      casteRatio: { ...this.casteRatio },
+      fighting: this.fighting,
+      losses: this.losses,
+      intruders: this.intruders,
+      raid: this.raid,
+      scouted: this.scouted,
+      roles: [this.roleCount[0]!, this.roleCount[1]!, this.roleCount[2]!],
       ratio: { ...this.ratio },
       broodCapacity: this.broodCapacity,
       dirt: this.dirt,
@@ -357,6 +443,7 @@ export class Colony {
     if (!force && this.lastSentVersion === this.grid.version) return undefined;
     this.lastSentVersion = this.grid.version;
     return {
+      colony: this.id,
       version: this.grid.version,
       width: this.grid.width,
       height: this.grid.height,
@@ -366,7 +453,18 @@ export class Colony {
   }
 }
 
-function roleState(role: number): number {
+/** Parts >= 0 summing to 1 (all-zero falls back to all workers). */
+export function normaliseCaste(r: CasteRatio): CasteRatio {
+  const w = Math.max(0, r.worker) || 0;
+  const s = Math.max(0, r.soldier) || 0;
+  const b = Math.max(0, r.breeder) || 0;
+  const sum = w + s + b;
+  return sum > 0
+    ? { worker: w / sum, soldier: s / sum, breeder: b / sum }
+    : { worker: 1, soldier: 0, breeder: 0 };
+}
+
+export function roleState(role: number): number {
   return role === AntRole.Dig
     ? AntState.Dig
     : role === AntRole.Nurse

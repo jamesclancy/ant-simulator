@@ -25,3 +25,13 @@
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
+.tuning-war {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.tuning-war button {
+  min-height: 36px;
+  font-size: 12px;
+}

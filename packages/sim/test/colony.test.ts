@@ -3,10 +3,11 @@ import { AntRole } from '@ant/shared';
 import type { ColonyConfig } from '@ant/shared';
 import { createSim } from '../src';
 
-const base = { seed: 11, worldSize: 1024, foodSources: 0 };
+const WORKERS_ONLY = { worker: 1, soldier: 0, breeder: 0 };
+const base = { seed: 11, worldSize: 1024, foodSources: 0, colonies: 1 };
 
 function sim(initialAnts: number, colony: Partial<ColonyConfig> = {}) {
-  return createSim({ ...base, initialAnts, colony });
+  return createSim({ ...base, initialAnts, colony: { casteRatio: WORKERS_ONLY, ...colony } });
 }
 
 function roles(s: ReturnType<typeof sim>): number[] {
@@ -104,7 +105,7 @@ describe('starvation', () => {
     for (let t = 0; t < 400; t++) s.step();
     expect(s.colony.queenAlive).toBe(false);
     expect(s.colony.lost).toBe(true);
-    expect(s.snapshot().colony.lost).toBe(true);
+    expect(s.snapshot().colonies[0]!.lost).toBe(true);
     const n = s.colony.brood.count;
     for (let t = 0; t < 200; t++) s.step();
     expect(s.colony.brood.count).toBeLessThanOrEqual(n); // no more eggs

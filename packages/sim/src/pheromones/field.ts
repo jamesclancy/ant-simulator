@@ -17,7 +17,7 @@ export interface PheromoneLayerConfig {
 export const DEFAULT_LAYER_CONFIG: Record<PheromoneType, PheromoneLayerConfig> = {
   food: { evaporation: 0.006, diffusion: 0.08, max: 1 },
   home: { evaporation: 0.01, diffusion: 0.05, max: 1 },
-  alarm: { evaporation: 0.03, diffusion: 0.25, max: 1 },
+  alarm: { evaporation: 0.01, diffusion: 0.4, max: 1 },
   enemy: { evaporation: 0.01, diffusion: 0.1, max: 1 },
 };
 
@@ -30,10 +30,22 @@ export interface PheromoneFieldOptions {
   types?: readonly PheromoneType[];
   /** Overrides merged over `DEFAULT_LAYER_CONFIG` per type. */
   layers?: Partial<Record<PheromoneType, Partial<PheromoneLayerConfig>>>;
+  /**
+   * Slow layers to update every other `update()` call with two ticks' worth of diffusion
+   * and evaporation (variance and decay compound, so the field evolves at the same rate).
+   * Halves their cost; their phases are staggered so the work is spread evenly. Requires
+   * `2 * diffusion <= 1`. Default: none (every layer every call).
+   */
+  halfRate?: readonly PheromoneType[];
 }
 
 /** With evaporation on, values below this are snapped to 0 so trails fully disappear. */
 const EPSILON = 1e-4;
+
+function rowEmpty(d: Float32Array, start: number, len: number): boolean {
+  for (let i = start, end = start + len; i < end; i++) if (d[i] !== 0) return false;
+  return true;
+}
 
 /**
  * Per-type scalar grids over the square world. Cell (cx, cy) covers world
@@ -54,6 +66,9 @@ export class PheromoneField {
   private readonly data: (Float32Array | undefined)[] = [];
   private readonly scratch: Float32Array;
   private readonly invCell: number;
+  /** Per layer id: 0 = every update, else updated when `(updates + phase) % 2 === 0`. */
+  private readonly half: number[] = [];
+  private updates = 0;
 
   constructor(opts: PheromoneFieldOptions) {
     this.worldSize = opts.worldSize;
@@ -67,6 +82,12 @@ export class PheromoneField {
     }
     const n = this.resolution * this.resolution;
     for (const t of this.types) this.data[PHEROMONE_TYPES.indexOf(t)] = new Float32Array(n);
+    let phase = 0;
+    for (const t of opts.halfRate ?? []) {
+      const id = PHEROMONE_TYPES.indexOf(t);
+      if (!this.data[id] || this.config[t].diffusion * 2 > 1) continue;
+      this.half[id] = 1 + (phase++ % 2);
+    }
     this.scratch = new Float32Array(n);
   }
 
@@ -126,26 +147,51 @@ export class PheromoneField {
   }
 
   /**
-   * One tick: separable diffusion then evaporation, per allocated layer.
+   * One tick: separable diffusion then evaporation, per allocated layer (`halfRate`
+   * layers every other call, two ticks at once).
    * Diffusion uses reflecting (zero-flux) borders, so it conserves total mass;
    * only evaporation (and the `max` clamp on deposit) removes it.
    */
   update(): void {
+    const u = this.updates++;
     for (let t = 0; t < this.data.length; t++) {
       const d = this.data[t];
       if (!d) continue;
       const cfg = this.config[PHEROMONE_TYPES[t]!];
-      this.blurAndEvaporate(d, cfg.diffusion, 1 - cfg.evaporation);
+      const half = this.half[t];
+      if (!half) {
+        this.blurAndEvaporate(d, cfg.diffusion, 1 - cfg.evaporation);
+      } else if ((u + half) % 2 === 0) {
+        const keep = 1 - cfg.evaporation;
+        this.blurAndEvaporate(d, cfg.diffusion * 2, keep * keep);
+      }
     }
   }
 
+  /**
+   * Rows that are entirely zero stay zero except where diffusion reaches them from a
+   * neighbouring row, so only the band `[first nonzero row - 1, last nonzero row + 1]` is
+   * processed. Sparse layers (alarm, enemy scent, small trails) cost little more than the
+   * row scan; an empty layer is skipped outright.
+   */
   private blurAndEvaporate(d: Float32Array, diffusion: number, keep: number): void {
     const res = this.resolution;
+    const last = res - 1;
+    let r0 = 0;
+    while (r0 < res && rowEmpty(d, r0 * res, res)) r0++;
+    if (r0 === res) return;
+    let r1 = last;
+    while (r1 > r0 && rowEmpty(d, r1 * res, res)) r1--;
+    // Rows written by the vertical pass, and the tmp rows it reads.
+    const v0 = r0 > 0 ? r0 - 1 : 0;
+    const v1 = r1 < last ? r1 + 1 : last;
+    const h0 = v0 > 0 ? v0 - 1 : 0;
+    const h1 = v1 < last ? v1 + 1 : last;
     const tmp = this.scratch;
     const side = diffusion * 0.5;
     const center = 1 - diffusion;
     // Horizontal pass: d -> tmp
-    for (let y = 0; y < res; y++) {
+    for (let y = h0; y <= h1; y++) {
       const row = y * res;
       let left = d[row]!;
       let cur = left;
@@ -158,10 +204,9 @@ export class PheromoneField {
       tmp[row + res - 1] = center * cur + side * (left + cur);
     }
     // Vertical pass with evaporation: tmp -> d
-    const last = res - 1;
     // Only snap tiny values to 0 when evaporating, so pure diffusion conserves mass.
     const eps = keep < 1 ? EPSILON : 0;
-    for (let y = 0; y < res; y++) {
+    for (let y = v0; y <= v1; y++) {
       const up = (y > 0 ? y - 1 : 0) * res;
       const mid = y * res;
       const down = (y < last ? y + 1 : last) * res;

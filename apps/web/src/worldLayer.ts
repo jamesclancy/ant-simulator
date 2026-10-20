@@ -2,8 +2,10 @@ import { Container, Graphics } from 'pixi.js';
 import type { Snapshot } from '@ant/shared';
 
 const FOOD_COLOR = 0xe8c547;
+/** Mound colour around each colony's entrance (index = colony id). */
+const MOUND_COLORS = [0x5a4632, 0x7a3a26];
 
-/** Draws the nest and food piles. Cheap enough to redraw food from every snapshot. */
+/** Draws the colonies' nests and food piles. Cheap enough to redraw food from every snapshot. */
 export class WorldLayer {
   readonly view = new Container();
   private nest = new Graphics();
@@ -17,16 +19,18 @@ export class WorldLayer {
   }
 
   update(snapshot: Snapshot): void {
-    const { x, y, radius } = snapshot.nest;
-    const nestKey = `${x},${y},${radius}`;
+    const nestKey = snapshot.colonies.map((c) => `${c.nest.x},${c.nest.y},${c.queenAlive}`).join();
     if (nestKey !== this.nestKey) {
       this.nestKey = nestKey;
-      this.nest
-        .clear()
-        .circle(x, y, radius * 1.6)
-        .fill({ color: 0x5a4632, alpha: 0.6 })
-        .circle(x, y, radius)
-        .fill(0x1a120a);
+      this.nest.clear();
+      for (const c of snapshot.colonies) {
+        const { x, y, radius } = c.nest;
+        this.nest
+          .circle(x, y, radius * 1.6)
+          .fill({ color: MOUND_COLORS[c.id] ?? 0x5a4632, alpha: c.queenAlive ? 0.6 : 0.25 })
+          .circle(x, y, radius)
+          .fill(0x1a120a);
+      }
     }
     const foodKey = snapshot.food.map((f) => `${f.id}:${f.x}:${f.y}:${Math.ceil(f.amount)}`).join();
     if (foodKey !== this.foodKey) {

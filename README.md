@@ -62,4 +62,10 @@ COOP/COEP headers so the page is cross-origin isolated (needed for `SharedArrayB
 ## Controls
 
 Mouse: wheel to zoom, drag to pan. Touch: drag to pan, pinch to zoom.
-HUD: pause/resume and 0.5x–4x speed.
+HUD: pause/resume and 0.5x–4x speed, black/red populations. Nest (or Tab, or tap an entrance)
+switches to the underground view; once your ants have found the red nest you can view it too.
+The Colony panel sets jobs, the caste mix of new ants, and whether soldiers raid the red nest.
+Kill the red queen to win; lose yours and it's over.
+
+URL options: `?difficulty=easy|normal|hard`, `?seed=N`, `?debug` (tuning panel, spawn-soldier
+buttons, enemy nest always viewable).

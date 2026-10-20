@@ -1,19 +1,35 @@
 import { Graphics, Particle, ParticleContainer } from 'pixi.js';
 import type { Renderer, Container, Texture } from 'pixi.js';
-import { ANT_LAYER_OFFSET, ANT_STRIDE, TICK_MS } from '@ant/shared';
+import {
+  ANT_FLAGS_OFFSET,
+  ANT_LAYER_OFFSET,
+  ANT_STRIDE,
+  Caste,
+  TICK_MS,
+  flagCaste,
+  flagColony,
+  flagFighting,
+} from '@ant/shared';
 import type { Snapshot } from '@ant/shared';
 
 export interface AntLayerOptions {
-  /** Which layer's ants to show: 0 surface (default), 1 underground. */
+  /** Which layer's ants to show: 0 surface (default), `1 + c` inside colony c's nest. */
   layer?: number;
   /** Ant sprite scale. */
   scale?: number;
-  /** Tint for ants carrying nothing. */
-  tint?: number;
+  /** Tint per colony (index = colony id) for ants carrying nothing. */
+  tints?: readonly number[];
+  /** Tint per colony while fighting. */
+  fightTints?: readonly number[];
 }
 
 const FOOD_TINT = 0xffc21a;
 const DIRT_TINT = 0x9c6b3a;
+/** Black colony (player's) and red colony on the surface. */
+export const SURFACE_TINTS = [0x151515, 0xc8321e] as const;
+export const SURFACE_FIGHT_TINTS = [0x5a3a3a, 0xff8040] as const;
+/** Soldiers are drawn this much bigger than workers. */
+const SOLDIER_SCALE = 1.35;
 
 /**
  * Batched ant renderer for one layer (ants of other layers are hidden). Holds the previous
@@ -37,12 +53,14 @@ export class AntLayer {
 
   private layer: number;
   private scale: number;
-  private tint: number;
+  private tints: readonly number[];
+  private fightTints: readonly number[];
 
   constructor(renderer: Renderer, parent: Container, opts: AntLayerOptions = {}) {
     this.layer = opts.layer ?? 0;
     this.scale = opts.scale ?? 1.5;
-    this.tint = opts.tint ?? 0x151515;
+    this.tints = opts.tints ?? SURFACE_TINTS;
+    this.fightTints = opts.fightTints ?? SURFACE_FIGHT_TINTS;
     const g = new Graphics();
     // Ant glyph pointing +x: three body segments and head.
     g.ellipse(-5, 0, 3.5, 2.5).fill(0xffffff);
@@ -50,7 +68,8 @@ export class AntLayer {
     g.ellipse(4.5, 0, 2.5, 2.2).fill(0xffffff);
     this.texture = renderer.generateTexture({ target: g, resolution: 4 });
     this.view = new ParticleContainer({
-      dynamicProperties: { position: true, rotation: true, vertex: false, color: true },
+      // vertex: per-ant scale (soldiers are bigger) changes as slots are reused.
+      dynamicProperties: { position: true, rotation: true, vertex: true, color: true },
     });
     parent.addChild(this.view);
   }
@@ -87,7 +106,7 @@ export class AntLayer {
           anchorY: 0.5,
           scaleX: this.scale,
           scaleY: this.scale,
-          tint: this.tint,
+          tint: this.tints[0]!,
         }),
       );
       this.shown++;
@@ -123,9 +142,15 @@ export class AntLayer {
         p.y = prev[o + 1]! + (cy - prev[o + 1]!) * alpha;
       }
       p.rotation = curr[o + 2]!;
-      // Food carriers are gold, dirt carriers brown, recruits dark gold.
+      const flags = curr[o + ANT_FLAGS_OFFSET]!;
+      const colony = flagColony(flags);
+      const s = flagCaste(flags) === Caste.Soldier ? this.scale * SOLDIER_SCALE : this.scale;
+      p.scaleX = s;
+      p.scaleY = s;
+      // Fighters flash; food carriers are gold, dirt carriers brown, recruits dark gold.
       const c = curr[o + 3]!;
-      p.tint = c > 0 ? FOOD_TINT : c < 0 ? DIRT_TINT : this.tint;
+      if (flagFighting(flags)) p.tint = this.fightTints[colony] ?? 0xffffff;
+      else p.tint = c > 0 ? FOOD_TINT : c < 0 ? DIRT_TINT : (this.tints[colony] ?? 0xffffff);
       if (this.recruitFlags[i]) p.tint = 0x8a6a10;
     }
     this.playerPos.valid = false;

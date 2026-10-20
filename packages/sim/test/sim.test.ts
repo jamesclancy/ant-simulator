@@ -7,6 +7,7 @@ const cfg = {
   seed: 42,
   worldSize: 512,
   initialAnts: 200,
+  colonies: 1,
   colony: { maxLayRate: 0 }, // keep the population fixed
 };
 

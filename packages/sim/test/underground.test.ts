@@ -3,8 +3,13 @@ import { ANT_LAYER_OFFSET, ANT_STRIDE, ChamberKind, NEST_TILE, TileType } from '
 import type { ColonyConfig } from '@ant/shared';
 import { createSim } from '../src';
 
-const base = { seed: 7, worldSize: 1024, initialAnts: 120, foodSources: 0 };
-const quiet: Partial<ColonyConfig> = { upkeepPerAnt: 0, queenUpkeep: 0, maxLayRate: 0 };
+const base = { seed: 7, worldSize: 1024, initialAnts: 120, foodSources: 0, colonies: 1 };
+const quiet: Partial<ColonyConfig> = {
+  upkeepPerAnt: 0,
+  queenUpkeep: 0,
+  maxLayRate: 0,
+  casteRatio: { worker: 1, soldier: 0, breeder: 0 },
+};
 
 function run(ticks: number, colony: Partial<ColonyConfig> = {}, seed = base.seed) {
   const sim = createSim({ ...base, seed, colony: { ...quiet, ...colony } });
@@ -106,8 +111,8 @@ describe('layer transitions', () => {
   it('puts the layer in the snapshot and the grid only when it changes', () => {
     const sim = run(300);
     const first = sim.snapshot({ nestGrid: true });
-    expect(first.nestGrid?.cells.length).toBe(96 * 64);
-    expect(sim.snapshot().nestGrid).toBeUndefined();
+    expect(first.nestGrids?.[0]?.cells.length).toBe(96 * 64);
+    expect(sim.snapshot().nestGrids).toBeUndefined();
     const under = [...Array(first.antCount).keys()].filter(
       (i) => first.ants[i * ANT_STRIDE + ANT_LAYER_OFFSET] === 1,
     );
@@ -116,11 +121,11 @@ describe('layer transitions', () => {
     let resent = false;
     for (let t = 0; t < 3000 && !resent; t++) {
       sim.step();
-      resent = sim.snapshot().nestGrid !== undefined;
+      resent = sim.snapshot().nestGrids !== undefined;
     }
     expect(resent).toBe(true);
-    expect(sim.snapshot().nestGrid).toBeUndefined();
-    expect(first.colony.underground).toBe(under.length);
+    expect(sim.snapshot().nestGrids).toBeUndefined();
+    expect(first.colonies[0]!.underground).toBe(under.length);
   });
 
   it('keeps underground ants on open tiles', () => {

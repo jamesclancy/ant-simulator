@@ -146,3 +146,66 @@ body.in-nest #player-hud,
 body.in-nest #joystick {
   display: none;
 }
+#gameover {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 55%);
+  z-index: 10;
+}
+#gameover .card {
+  max-width: 360px;
+  width: 100%;
+  padding: 20px;
+  border-radius: 16px;
+  background: #1f2a1f;
+  color: #e8f0e8;
+  text-align: center;
+  box-shadow: 0 10px 40px rgb(0 0 0 / 50%);
+}
+#gameover h2 {
+  margin: 0 0 8px;
+  font-size: 26px;
+}
+#gameover.win h2 {
+  color: #ffd84a;
+}
+#gameover.lose h2 {
+  color: #ff7a5a;
+}
+#gameover p {
+  margin: 0 0 16px;
+  opacity: 0.85;
+  white-space: pre-line;
+}
+#gameover button {
+  background: #7fb069;
+  color: #10200f;
+  font-weight: 600;
+}
+#hud-colonies {
+  display: flex;
+  gap: 10px;
+  padding: 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+.pop-black::before,
+.pop-red::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  border-radius: 50%;
+  vertical-align: -1px;
+}
+.pop-black::before {
+  background: #111;
+  box-shadow: 0 0 0 1px #aaa;
+}
+.pop-red::before {
+  background: #d8381e;
+}

@@ -18,6 +18,8 @@ export class NestGrid {
   /** Flat indices of Queen/Nursery tiles, rebuilt on change (used to place brood). */
   nurseryTiles: number[] = [];
   foodTiles: number[] = [];
+  /** Flat indices of Queen chamber tiles (raid target). */
+  queenTiles: number[] = [];
 
   constructor(
     readonly width = NEST_GRID_W,
@@ -66,12 +68,14 @@ export class NestGrid {
     let open = 0;
     this.nurseryTiles = [];
     this.foodTiles = [];
+    this.queenTiles = [];
     for (let i = 0; i < this.tiles.length; i++) {
       const t = this.tiles[i]!;
       if (t !== TileType.Tunnel && t !== TileType.Chamber) continue;
       open++;
       const k = this.kinds[i]!;
       if (k === ChamberKind.Queen || k === ChamberKind.Nursery) this.nurseryTiles.push(i);
+      if (k === ChamberKind.Queen) this.queenTiles.push(i);
       else if (k === ChamberKind.Food) this.foodTiles.push(i);
     }
     this.openCount = open;
