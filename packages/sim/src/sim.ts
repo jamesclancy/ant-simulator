@@ -1,6 +1,7 @@
 import {
   ANT_STRIDE,
   DEFAULT_ANT_COUNT,
+  DEFAULT_BEHAVIOR,
   DEFAULT_FOOD_AMOUNT,
   DEFAULT_FOOD_SOURCES,
   DEFAULT_NEST_RADIUS,
@@ -12,15 +13,13 @@ import {
   TICK_RATE_HZ,
 } from '@ant/shared';
 import { AntState } from '@ant/shared';
-import type { Command, SimConfig, Snapshot } from '@ant/shared';
-import { createAntStore } from './ants';
+import type { Command, SimConfig, SimConfigInput, Snapshot } from '@ant/shared';
+import { createAntStore, updateAnts } from './ants';
 import type { AntStore } from './ants';
 import { PheromoneField } from './pheromones';
 import { createRng } from './rng';
 import { createWorld } from './world';
 import type { World } from './world';
-import { placeholderForage } from './world/placeholderForage';
-import type { Rng } from './rng';
 
 export interface Sim {
   readonly config: SimConfig;
@@ -41,11 +40,8 @@ export interface Sim {
   snapshot(options?: { pheromones?: boolean }): Snapshot;
 }
 
-const ANT_SPEED = 20; // world units per second
-const TURN_JITTER = 0.5; // max radians turned per tick
-const DEMO_HOME_DEPOSIT = 0.008; // placeholder trail strength per ant per tick
-
-export function resolveConfig(partial: Partial<SimConfig> = {}): SimConfig {
+export function resolveConfig(partial: SimConfigInput = {}): SimConfig {
+  const { behavior, ...rest } = partial;
   return {
     seed: DEFAULT_SEED,
     worldSize: DEFAULT_WORLD_SIZE,
@@ -55,11 +51,12 @@ export function resolveConfig(partial: Partial<SimConfig> = {}): SimConfig {
     foodSources: DEFAULT_FOOD_SOURCES,
     foodAmount: DEFAULT_FOOD_AMOUNT,
     nestRadius: DEFAULT_NEST_RADIUS,
-    ...partial,
+    ...rest,
+    behavior: { ...DEFAULT_BEHAVIOR, ...behavior },
   };
 }
 
-export function createSim(partial: Partial<SimConfig> = {}): Sim {
+export function createSim(partial: SimConfigInput = {}): Sim {
   const config = resolveConfig(partial);
   const rng = createRng(config.seed);
   const ants = createAntStore(Math.min(MAX_ANTS, Math.max(config.initialAnts, 1024)));
@@ -80,6 +77,7 @@ export function createSim(partial: Partial<SimConfig> = {}): Sim {
       ants.heading[idx] = rng.range(0, Math.PI * 2);
       ants.carrying[idx] = 0;
       ants.state[idx] = AntState.Wander;
+      ants.strength[idx] = 0;
     }
   };
 
@@ -117,17 +115,15 @@ export function createSim(partial: Partial<SimConfig> = {}): Sim {
           case 'removeFood':
             world.food.remove(cmd.id);
             break;
+          case 'setBehavior':
+            Object.assign(config.behavior, cmd.params);
+            break;
         }
       }
     },
     step() {
-      randomWalk(ants, rng, config);
-      // Placeholder until steering exists: walking ants lay a faint `home` trail.
-      for (let i = 0; i < ants.count; i++) {
-        pheromones.deposit('home', ants.x[i]!, ants.y[i]!, DEMO_HOME_DEPOSIT);
-      }
+      updateAnts(ants, pheromones, world, rng, config.behavior, config.tickRate);
       pheromones.update();
-      placeholderForage(ants, world);
       tick++;
     },
     snapshot(options) {
@@ -163,29 +159,6 @@ export function createSim(partial: Partial<SimConfig> = {}): Sim {
       return snap;
     },
   };
-}
-
-/** Placeholder behaviour: correlated random walk with bouncing world edges. */
-function randomWalk(ants: AntStore, rng: Rng, config: SimConfig): void {
-  const step = ANT_SPEED / config.tickRate;
-  const size = config.worldSize;
-  const { x, y, heading } = ants;
-  for (let i = 0; i < ants.count; i++) {
-    let h = heading[i]! + rng.range(-TURN_JITTER, TURN_JITTER);
-    let nx = x[i]! + Math.cos(h) * step;
-    let ny = y[i]! + Math.sin(h) * step;
-    if (nx < 0 || nx > size) {
-      h = Math.PI - h;
-      nx = clamp(nx, 0, size);
-    }
-    if (ny < 0 || ny > size) {
-      h = -h;
-      ny = clamp(ny, 0, size);
-    }
-    x[i] = nx;
-    y[i] = ny;
-    heading[i] = h;
-  }
 }
 
 function clamp(v: number, lo: number, hi: number): number {

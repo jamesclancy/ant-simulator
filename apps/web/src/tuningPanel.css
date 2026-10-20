@@ -1,0 +1,27 @@
+.tuning {
+  position: fixed;
+  top: calc(var(--sat) + 8px);
+  right: calc(var(--sar) + 8px);
+  max-height: calc(100% - var(--sat) - var(--sab) - 96px);
+  overflow-y: auto;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 65%);
+  color: #e8f0e8;
+  font-size: 12px;
+}
+.tuning summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.tuning label {
+  display: grid;
+  grid-template-columns: 9.5em 8em 4em;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+.tuning output {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}

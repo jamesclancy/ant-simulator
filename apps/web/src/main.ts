@@ -6,6 +6,7 @@ import { ScentOverlay } from './scentOverlay';
 import { WorldLayer } from './worldLayer';
 import { SimClient } from './simClient';
 import { pauseWhenBackgrounded } from './lifecycle';
+import { mountTuningPanel } from './tuningPanel';
 
 async function main(): Promise<void> {
   const host = document.getElementById('app')!;
@@ -42,6 +43,9 @@ async function main(): Promise<void> {
       worldLayer = new WorldLayer(world);
       ants = new AntLayer(app.renderer, world);
       camera.focus(config.worldSize / 2, config.worldSize / 2, 1.5);
+      if (new URLSearchParams(location.search).has('debug')) {
+        mountTuningPanel(sim, config.behavior);
+      }
     },
     onSnapshot(snapshot, speed) {
       worldLayer?.update(snapshot);

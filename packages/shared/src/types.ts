@@ -21,7 +21,55 @@ export interface SimConfig {
   foodAmount: number;
   /** Nest entrance radius in world units. */
   nestRadius: number;
+  /** Ant steering + foraging tuning. Live-tunable via the `setBehavior` command. */
+  behavior: AntBehaviorConfig;
 }
+
+/**
+ * Foraging behaviour knobs. Distances are world units, angles radians, rates per tick
+ * (fixed `tickRate`), pheromone amounts in layer units (layer max is 1).
+ * Defaults: `DEFAULT_BEHAVIOR`.
+ */
+export interface AntBehaviorConfig {
+  /** Walking speed, world units per second. */
+  speed: number;
+  /** Speed multiplier while carrying food. */
+  carrySpeedFactor: number;
+  /** Angle between the centre sensor and each side sensor. */
+  sensorAngle: number;
+  /** How far ahead the sensors sample. */
+  sensorDistance: number;
+  /** Max heading change per tick towards the strongest sensor. */
+  turnRate: number;
+  /** Uniform random heading noise per tick, +/- this. */
+  jitter: number;
+  /** Sensor readings below this count as "no trail" (pure wander). */
+  trailThreshold: number;
+  /** Pheromone laid per tick right after leaving the nest (`home`) or a food pile (`food`). */
+  depositHome: number;
+  depositFood: number;
+  /**
+   * Per-tick multiplier on an ant's deposit strength since it last touched the nest/food,
+   * so trails are strongest at their source and gradients point back towards it.
+   */
+  depositDecay: number;
+  /** Ants see food piles whose edge is within this distance and head straight for them. */
+  foodSenseRadius: number;
+  /** Carrying ants within this distance of the nest centre head straight in. */
+  nestSenseRadius: number;
+  /**
+   * Path integration: max heading change per tick pulling carrying ants towards the nest,
+   * on top of trail steering. Keeps ants that found food off-trail from getting lost.
+   */
+  homingBias: number;
+  /** Master switch: when false ants neither lay nor follow pheromones (baseline for tests). */
+  pheromones: boolean;
+}
+
+/** Input accepted by `createSim` / the worker `init` message: everything optional. */
+export type SimConfigInput = Partial<Omit<SimConfig, 'behavior'>> & {
+  behavior?: Partial<AntBehaviorConfig>;
+};
 
 /** Per-ant behaviour state, stored in `AntStore.state`. Steering logic lives elsewhere. */
 export const AntState = {
@@ -58,7 +106,9 @@ export type Command =
   /** Clears one layer, or all layers when `pheromone` is omitted. */
   | { type: 'clearPheromones'; pheromone?: PheromoneType }
   | { type: 'placeFood'; x: number; y: number; amount: number }
-  | { type: 'removeFood'; id: number };
+  | { type: 'removeFood'; id: number }
+  /** Live-tune behaviour parameters (merged over the current values). */
+  | { type: 'setBehavior'; params: Partial<AntBehaviorConfig> };
 
 /** Quantized pheromone layers, `layers.length * resolution^2` bytes, layer-major then row-major. */
 export interface PheromoneSnapshot {
@@ -85,7 +135,7 @@ export interface Snapshot {
 
 /** Main thread -> worker. */
 export type WorkerInMessage =
-  | { type: 'init'; config: Partial<SimConfig> }
+  | { type: 'init'; config: SimConfigInput }
   | { type: 'commands'; commands: Command[] }
   | { type: 'setPaused'; paused: boolean }
   | { type: 'setSpeed'; speed: number }
