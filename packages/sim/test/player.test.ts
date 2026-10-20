@@ -121,7 +121,7 @@ describe('player ant', () => {
     sim.ants.heading[other] = Math.PI / 2; // towards the trail
     run(sim, 25);
     expect(sim.ants.state[other]).toBe(AntState.FollowTrail);
-    expect(Math.abs(sim.ants.y[other]! - 300)).toBeLessThan(25);
+    expect(Math.abs(sim.ants.y[other] - 300)).toBeLessThan(25);
   });
 
   it('trail toggle deposits food pheromone while moving', () => {
