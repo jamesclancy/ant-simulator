@@ -1,0 +1,74 @@
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  color-scheme: dark;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #1b2a1b;
+  font-family: system-ui, sans-serif;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+#app,
+#app canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  display: block;
+}
+#hud {
+  position: fixed;
+  left: var(--sal);
+  right: var(--sar);
+  bottom: var(--sab);
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  pointer-events: none;
+}
+.bar {
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgb(0 0 0 / 55%);
+  color: #e8f0e8;
+  font-size: 14px;
+}
+#speeds {
+  display: flex;
+  gap: 4px;
+}
+button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #3b5a3b;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+button[aria-pressed='true'] {
+  background: #7fb069;
+  color: #10200f;
+}
+#stats {
+  padding: 0 8px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
