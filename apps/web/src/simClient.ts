@@ -33,4 +33,7 @@ export class SimClient {
   setSpeed(speed: number): void {
     this.send({ type: 'setSpeed', speed });
   }
+  setScentVision(enabled: boolean): void {
+    this.send({ type: 'setScentVision', enabled });
+  }
 }

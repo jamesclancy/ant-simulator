@@ -4,11 +4,14 @@ import {
   DEFAULT_SEED,
   DEFAULT_WORLD_SIZE,
   MAX_ANTS,
+  PHEROMONE_RESOLUTION,
+  PHEROMONE_SNAPSHOT_INTERVAL,
   TICK_RATE_HZ,
 } from '@ant/shared';
 import type { Command, SimConfig, Snapshot } from '@ant/shared';
 import { createAntStore } from './ants';
 import type { AntStore } from './ants';
+import { PheromoneField } from './pheromones';
 import { createRng } from './rng';
 import type { Rng } from './rng';
 
@@ -16,15 +19,22 @@ export interface Sim {
   readonly config: SimConfig;
   readonly tick: number;
   readonly ants: AntStore;
+  /** Pheromone grids. Read via `sample`/`layer`; the sim step owns writes. */
+  readonly pheromones: PheromoneField;
   applyCommands(commands: readonly Command[]): void;
   /** Advance exactly one fixed tick. */
   step(): void;
-  /** Copy current state into a fresh, transferable snapshot. */
-  snapshot(): Snapshot;
+  /**
+   * Copy current state into a fresh, transferable snapshot. Pheromone data is
+   * included when `options.pheromones` is true, or by default every
+   * `PHEROMONE_SNAPSHOT_INTERVAL` ticks.
+   */
+  snapshot(options?: { pheromones?: boolean }): Snapshot;
 }
 
 const ANT_SPEED = 20; // world units per second
 const TURN_JITTER = 0.5; // max radians turned per tick
+const DEMO_HOME_DEPOSIT = 0.008; // placeholder trail strength per ant per tick
 
 export function resolveConfig(partial: Partial<SimConfig> = {}): SimConfig {
   return {
@@ -32,6 +42,7 @@ export function resolveConfig(partial: Partial<SimConfig> = {}): SimConfig {
     worldSize: DEFAULT_WORLD_SIZE,
     initialAnts: DEFAULT_ANT_COUNT,
     tickRate: TICK_RATE_HZ,
+    pheromoneResolution: PHEROMONE_RESOLUTION,
     ...partial,
   };
 }
@@ -40,6 +51,10 @@ export function createSim(partial: Partial<SimConfig> = {}): Sim {
   const config = resolveConfig(partial);
   const rng = createRng(config.seed);
   const ants = createAntStore(Math.min(MAX_ANTS, Math.max(config.initialAnts, 1024)));
+  const pheromones = new PheromoneField({
+    worldSize: config.worldSize,
+    resolution: config.pheromoneResolution,
+  });
   let tick = 0;
 
   const spawn = (count: number, cx: number, cy: number, spread: number): void => {
@@ -61,6 +76,7 @@ export function createSim(partial: Partial<SimConfig> = {}): Sim {
       return tick;
     },
     ants,
+    pheromones,
     applyCommands(commands) {
       for (const cmd of commands) {
         switch (cmd.type) {
@@ -70,14 +86,27 @@ export function createSim(partial: Partial<SimConfig> = {}): Sim {
           case 'clearAnts':
             ants.count = 0;
             break;
+          case 'depositPheromone':
+            if (pheromones.has(cmd.pheromone)) {
+              pheromones.deposit(cmd.pheromone, cmd.x, cmd.y, cmd.amount);
+            }
+            break;
+          case 'clearPheromones':
+            if (!cmd.pheromone || pheromones.has(cmd.pheromone)) pheromones.clear(cmd.pheromone);
+            break;
         }
       }
     },
     step() {
       randomWalk(ants, rng, config);
+      // Placeholder until steering exists: walking ants lay a faint `home` trail.
+      for (let i = 0; i < ants.count; i++) {
+        pheromones.deposit('home', ants.x[i]!, ants.y[i]!, DEMO_HOME_DEPOSIT);
+      }
+      pheromones.update();
       tick++;
     },
-    snapshot() {
+    snapshot(options) {
       const out = new Float32Array(ants.count * ANT_STRIDE);
       for (let i = 0; i < ants.count; i++) {
         const o = i * ANT_STRIDE;
@@ -85,7 +114,15 @@ export function createSim(partial: Partial<SimConfig> = {}): Sim {
         out[o + 1] = ants.y[i]!;
         out[o + 2] = ants.heading[i]!;
       }
-      return { tick, antCount: ants.count, ants: out };
+      const snap: Snapshot = { tick, antCount: ants.count, ants: out };
+      if (options?.pheromones ?? tick % PHEROMONE_SNAPSHOT_INTERVAL === 0) {
+        snap.pheromones = {
+          resolution: pheromones.resolution,
+          types: [...pheromones.types],
+          data: pheromones.quantize(),
+        };
+      }
+      return snap;
     },
   };
 }
