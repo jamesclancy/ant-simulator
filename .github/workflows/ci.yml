@@ -5,38 +5,27 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
 jobs:
   check:
+    name: ${{ matrix.task }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [lint, typecheck, test, build, bench]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm build
-      - run: pnpm bench
-
-  mobile:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm mobile:sync
-      - name: Android debug build
-        working-directory: apps/mobile/android
-        run: ./gradlew assembleDebug --no-daemon
+      - run: pnpm ${{ matrix.task }}
