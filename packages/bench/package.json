@@ -1,0 +1,18 @@
+{
+  "name": "@ant/bench",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@ant/shared": "workspace:*",
+    "@ant/sim": "workspace:*"
+  },
+  "scripts": {
+    "bench": "tsx src/run.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15"
+  }
+}
