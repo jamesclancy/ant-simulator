@@ -29,6 +29,15 @@ pnpm install
 | `pnpm typecheck` | `tsc` in every package                                 |
 | `pnpm bench`     | Headless benchmark; optional args: `-- <ants> <ticks>` |
 
+## Deploying (Vercel)
+
+`vercel.json` at the repo root configures the build (`pnpm build` → `apps/web/dist`) and sends
+COOP/COEP headers so the page is cross-origin isolated (needed for `SharedArrayBuffer`).
+
+- **Git integration:** import the repo at [vercel.com/new](https://vercel.com/new) and leave the
+  Root Directory as the repo root. Pushes to `main` deploy to production; PRs get preview URLs.
+- **CLI:** `npx vercel` for a preview deploy, `npx vercel --prod` for production.
+
 ## Controls
 
 Mouse: wheel to zoom, drag to pan. Touch: drag to pan, pinch to zoom.
