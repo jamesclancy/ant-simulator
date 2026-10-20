@@ -5,6 +5,8 @@ const MAX_ZOOM = 8;
 
 /** Pan/zoom controller for a world container: wheel, mouse drag, one-finger drag, pinch. */
 export class Camera {
+  /** Disabled cameras ignore input (the hidden layer's camera while another is shown). */
+  enabled = true;
   private pointers = new Map<number, { x: number; y: number }>();
   private pinchDist = 0;
 
@@ -51,18 +53,21 @@ export class Camera {
   }
 
   private onWheel = (e: WheelEvent): void => {
+    if (!this.enabled) return;
     e.preventDefault();
     const r = this.el.getBoundingClientRect();
     this.zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015));
   };
 
   private onDown = (e: PointerEvent): void => {
+    if (!this.enabled) return;
     this.el.setPointerCapture(e.pointerId);
     this.pointers.set(e.pointerId, this.local(e));
     if (this.pointers.size === 2) this.pinchDist = this.pinchDistance();
   };
 
   private onMove = (e: PointerEvent): void => {
+    if (!this.enabled) return;
     const prev = this.pointers.get(e.pointerId);
     if (!prev) return;
     const cur = this.local(e);

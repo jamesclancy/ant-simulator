@@ -2,6 +2,7 @@ import {
   ANT_STRIDE,
   DEFAULT_ANT_COUNT,
   DEFAULT_BEHAVIOR,
+  DEFAULT_COLONY,
   DEFAULT_FOOD_AMOUNT,
   DEFAULT_FOOD_SOURCES,
   DEFAULT_NEST_RADIUS,
@@ -15,6 +16,7 @@ import {
 import { AntState } from '@ant/shared';
 import type { Command, SimConfig, SimConfigInput, Snapshot } from '@ant/shared';
 import { createAntStore, updateAnts } from './ants';
+import { Colony } from './colony';
 import type { AntStore } from './ants';
 import { PheromoneField } from './pheromones';
 import { PlayerController, isPlayerCommand } from './player';
@@ -32,19 +34,24 @@ export interface Sim {
   readonly world: World;
   /** The yellow player ant and its recruits. */
   readonly player: PlayerController;
+  /** Colonies (index = colony id). Currently just the player's. */
+  readonly colonies: readonly Colony[];
+  /** The player's colony (id 0). */
+  readonly colony: Colony;
   applyCommands(commands: readonly Command[]): void;
   /** Advance exactly one fixed tick. */
   step(): void;
   /**
    * Copy current state into a fresh, transferable snapshot. Pheromone data is
    * included when `options.pheromones` is true, or by default every
-   * `PHEROMONE_SNAPSHOT_INTERVAL` ticks.
+   * `PHEROMONE_SNAPSHOT_INTERVAL` ticks. The nest grid is included when it changed since
+   * the previous snapshot, or when `options.nestGrid` is true.
    */
-  snapshot(options?: { pheromones?: boolean }): Snapshot;
+  snapshot(options?: { pheromones?: boolean; nestGrid?: boolean }): Snapshot;
 }
 
 export function resolveConfig(partial: SimConfigInput = {}): SimConfig {
-  const { behavior, ...rest } = partial;
+  const { behavior, colony, ...rest } = partial;
   return {
     seed: DEFAULT_SEED,
     worldSize: DEFAULT_WORLD_SIZE,
@@ -56,19 +63,22 @@ export function resolveConfig(partial: SimConfigInput = {}): SimConfig {
     nestRadius: DEFAULT_NEST_RADIUS,
     ...rest,
     behavior: { ...DEFAULT_BEHAVIOR, ...behavior },
+    colony: { ...DEFAULT_COLONY, ...colony },
   };
 }
 
 export function createSim(partial: SimConfigInput = {}): Sim {
   const config = resolveConfig(partial);
   const rng = createRng(config.seed);
-  const ants = createAntStore(Math.min(MAX_ANTS, Math.max(config.initialAnts, 1024)));
+  const ants = createAntStore(MAX_ANTS);
   const pheromones = new PheromoneField({
     worldSize: config.worldSize,
     resolution: config.pheromoneResolution,
   });
   // Separate stream so world layout doesn't depend on (or perturb) ant spawning.
   const world = createWorld(config, createRng(config.seed ^ 0x9e3779b9));
+  const colony = new Colony({ id: 0, config: config.colony, nest: world.nest, seed: config.seed });
+  const colonies = [colony];
   let tick = 0;
 
   const spawn = (count: number, cx: number, cy: number, spread: number): void => {
@@ -81,6 +91,8 @@ export function createSim(partial: SimConfigInput = {}): Sim {
       ants.carrying[idx] = 0;
       ants.state[idx] = AntState.Wander;
       ants.strength[idx] = 0;
+      ants.layer[idx] = 0;
+      ants.role[idx] = 0;
     }
   };
 
@@ -94,6 +106,9 @@ export function createSim(partial: SimConfigInput = {}): Sim {
     rng,
     config.worldSize,
   );
+  // Starvation swap-removes ants: keep the player's slot safe and keep it pointing at the player.
+  colony.protectedIndex = () => player.index;
+  colony.onAntMoved = (from, to) => player.remap(from, to);
   player.reset();
 
   return {
@@ -105,6 +120,8 @@ export function createSim(partial: SimConfigInput = {}): Sim {
     pheromones,
     world,
     player,
+    colonies,
+    colony,
     applyCommands(commands) {
       for (const cmd of commands) {
         if (isPlayerCommand(cmd)) {
@@ -136,12 +153,31 @@ export function createSim(partial: SimConfigInput = {}): Sim {
           case 'setBehavior':
             Object.assign(config.behavior, cmd.params);
             break;
+          case 'setBehaviorRatio':
+            colonies[cmd.colony ?? 0]?.setBehaviorRatio(cmd);
+            break;
+          case 'setCasteRatio': {
+            const c = colonies[cmd.colony ?? 0];
+            if (c)
+              c.casteRatio = { worker: cmd.worker, soldier: cmd.soldier, breeder: cmd.breeder };
+            break;
+          }
         }
       }
     },
     step() {
-      updateAnts(ants, pheromones, world, rng, config.behavior, config.tickRate, player.index);
+      updateAnts(
+        ants,
+        pheromones,
+        world,
+        rng,
+        config.behavior,
+        config.tickRate,
+        player.index,
+        colony,
+      );
       player.step();
+      for (const c of colonies) c.step(ants, rng, config.behavior, config.tickRate);
       pheromones.update();
       tick++;
     },
@@ -153,6 +189,7 @@ export function createSim(partial: SimConfigInput = {}): Sim {
         out[o + 1] = ants.y[i]!;
         out[o + 2] = ants.heading[i]!;
         out[o + 3] = ants.carrying[i]!;
+        out[o + 4] = ants.layer[i]!;
       }
       const snap: Snapshot = {
         tick,
@@ -169,7 +206,10 @@ export function createSim(partial: SimConfigInput = {}): Sim {
         colonyFood: world.nest.store,
         player: player.info(),
         events: player.drainEvents(),
+        colony: colony.snapshotColony(ants),
       };
+      const grid = colony.snapshotGrid(options?.nestGrid);
+      if (grid) snap.nestGrid = grid;
       if (options?.pheromones ?? tick % PHEROMONE_SNAPSHOT_INTERVAL === 0) {
         snap.pheromones = {
           resolution: pheromones.resolution,

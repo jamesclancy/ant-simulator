@@ -26,10 +26,14 @@ for (const ants of counts) {
   const p = (q: number): number =>
     samples[Math.min(samples.length - 1, Math.floor(q * samples.length))]!;
   let loaded = 0;
-  for (let i = 0; i < sim.ants.count; i++) if (sim.ants.carrying[i]! > 0) loaded++;
+  let under = 0;
+  for (let i = 0; i < sim.ants.count; i++) {
+    if (sim.ants.carrying[i]! > 0) loaded++;
+    under += sim.ants.layer[i]!;
+  }
 
   console.log(
-    `ants=${sim.ants.count} ticks=${ticks} carrying=${loaded} colonyFood=${sim.world.nest.store}`,
+    `ants=${sim.ants.count} ticks=${ticks} carrying=${loaded} underground=${under} (${((100 * under) / sim.ants.count).toFixed(0)}%) openTiles=${sim.colony.grid.openCount} colonyFood=${sim.world.nest.store}`,
   );
   console.log(
     `  step ms/tick mean=${mean.toFixed(3)} p50=${p(0.5).toFixed(3)} p95=${p(0.95).toFixed(3)} max=${p(1).toFixed(3)}`,

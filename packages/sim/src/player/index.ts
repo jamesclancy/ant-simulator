@@ -142,6 +142,13 @@ export class PlayerController {
     return out;
   }
 
+  /** An ant was swap-removed into a lower slot (colony starvation): follow it. */
+  remap(from: number, to: number): void {
+    if (this.index === from) this.index = to;
+    // Whatever sat in slot `to` was removed; the ant formerly at `from` now lives there.
+    this.recruited = this.recruited.filter((r) => r !== to).map((r) => (r === from ? to : r));
+  }
+
   /** Re-resolve the player if its slot is gone: swap to the ant nearest its last position. */
   private ensurePlayer(): void {
     const { ants } = this;

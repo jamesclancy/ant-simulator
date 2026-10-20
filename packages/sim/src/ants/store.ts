@@ -16,6 +16,10 @@ export interface AntStore {
    * then multiplied by `depositDecay` every tick. Scales pheromone deposits.
    */
   strength: Float32Array;
+  /** 0 = surface, 1 = underground (nest grid space). */
+  layer: Uint8Array;
+  /** `AntRole` value: the job the colony wants this ant doing. */
+  role: Uint8Array;
 }
 
 export function createAntStore(capacity: number): AntStore {
@@ -28,7 +32,23 @@ export function createAntStore(capacity: number): AntStore {
     carrying: new Float32Array(capacity),
     state: new Uint8Array(capacity),
     strength: new Float32Array(capacity),
+    layer: new Uint8Array(capacity),
+    role: new Uint8Array(capacity),
   };
+}
+
+/** Remove ant `i` by moving the last ant into its slot (so indices of other ants may change). */
+export function removeAnt(ants: AntStore, i: number): void {
+  const last = --ants.count;
+  if (i === last) return;
+  ants.x[i] = ants.x[last]!;
+  ants.y[i] = ants.y[last]!;
+  ants.heading[i] = ants.heading[last]!;
+  ants.carrying[i] = ants.carrying[last]!;
+  ants.state[i] = ants.state[last]!;
+  ants.strength[i] = ants.strength[last]!;
+  ants.layer[i] = ants.layer[last]!;
+  ants.role[i] = ants.role[last]!;
 }
 
 export { MAX_ANTS };

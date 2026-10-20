@@ -28,9 +28,25 @@ describe('steering primitives', () => {
 
 const NEST = 512;
 
+/** Isolates foraging from the colony economy: everyone forages, nothing eats, nothing hatches. */
+export const NO_ECONOMY = {
+  behaviorRatio: { forage: 1, dig: 0, nurse: 0 },
+  startFood: 0,
+  maxLayRate: 0,
+  upkeepPerAnt: 0,
+  queenUpkeep: 0,
+};
+
 /** Seeded colony on a 1024 world with a single pile 316 units from the nest. */
 function forage(ticks: number, behavior: Partial<AntBehaviorConfig> = {}, seed = 1) {
-  const sim = createSim({ seed, worldSize: 1024, initialAnts: 400, foodSources: 0, behavior });
+  const sim = createSim({
+    seed,
+    worldSize: 1024,
+    initialAnts: 400,
+    foodSources: 0,
+    behavior,
+    colony: NO_ECONOMY,
+  });
   sim.applyCommands([{ type: 'placeFood', x: NEST + 300, y: NEST + 100, amount: 1000 }]);
   for (let t = 0; t < ticks; t++) sim.step();
   return sim;
@@ -83,7 +99,7 @@ describe('foraging', () => {
   });
 
   it('applies live behaviour tuning via setBehavior without touching defaults', () => {
-    const sim = createSim({ seed: 3, worldSize: 512, initialAnts: 50 });
+    const sim = createSim({ seed: 3, worldSize: 512, initialAnts: 50, colony: NO_ECONOMY });
     sim.applyCommands([{ type: 'setBehavior', params: { speed: 0 } }]);
     expect(sim.config.behavior.speed).toBe(0);
     expect(DEFAULT_BEHAVIOR.speed).not.toBe(0);

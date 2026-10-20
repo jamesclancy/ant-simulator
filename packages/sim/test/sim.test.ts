@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { ANT_STRIDE } from '@ant/shared';
+import { ANT_LAYER_OFFSET, ANT_STRIDE } from '@ant/shared';
 import type { Command } from '@ant/shared';
 import { createRng, createSim } from '../src';
 
-const cfg = { seed: 42, worldSize: 512, initialAnts: 200 };
+const cfg = {
+  seed: 42,
+  worldSize: 512,
+  initialAnts: 200,
+  colony: { maxLayRate: 0 }, // keep the population fixed
+};
 
 function run(commands: Record<number, Command[]>, ticks: number) {
   const sim = createSim(cfg);
@@ -49,6 +54,8 @@ describe('sim', () => {
     expect(snap.antCount).toBe(200);
     expect(snap.ants.length).toBe(200 * ANT_STRIDE);
     for (let i = 0; i < snap.antCount; i++) {
+      // Underground ants live in nest-grid space, not world space.
+      if (snap.ants[i * ANT_STRIDE + ANT_LAYER_OFFSET] !== 0) continue;
       expect(snap.ants[i * ANT_STRIDE]!).toBeGreaterThanOrEqual(0);
       expect(snap.ants[i * ANT_STRIDE]!).toBeLessThanOrEqual(512);
       expect(snap.ants[i * ANT_STRIDE + 1]!).toBeGreaterThanOrEqual(0);

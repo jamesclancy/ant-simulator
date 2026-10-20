@@ -35,7 +35,7 @@ describe('food field', () => {
 
 describe('nest', () => {
   it('detects the entrance and stores deposits', () => {
-    const { world } = createSim(cfg);
+    const { world } = createSim({ ...cfg, colony: { startFood: 0 } });
     const { nest } = world;
     expect(nest.isAtNest(nest.x, nest.y)).toBe(true);
     expect(nest.isAtNest(nest.x + nest.radius + 1, nest.y)).toBe(false);

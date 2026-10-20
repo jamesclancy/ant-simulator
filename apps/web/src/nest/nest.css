@@ -1,0 +1,39 @@
+#colony-panel {
+  position: fixed;
+  top: calc(var(--sat, 0px) + 8px);
+  left: calc(var(--sal, 0px) + 8px);
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgb(0 0 0 / 60%);
+  color: #e8f0e8;
+  font-size: 13px;
+}
+#colony-panel summary {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+}
+.colony-readout {
+  white-space: pre-line;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+.colony-row {
+  display: grid;
+  grid-template-columns: 52px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+.colony-row input {
+  width: 100%;
+  accent-color: #7fb069;
+}
+.colony-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
