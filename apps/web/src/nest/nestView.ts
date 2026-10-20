@@ -52,7 +52,8 @@ export class NestView {
   private broodKey = '';
   private nurseryTiles: number[] = [];
 
-  constructor() {
+  /** `colony` picks the queen's colours (0 black, 1 red). */
+  constructor(readonly colony = 0) {
     this.view.addChild(
       this.soil,
       this.features,
@@ -181,14 +182,22 @@ export class NestView {
     q.clear();
     const x = (c.queenX + 0.5) * T;
     const y = (c.queenY + 0.5) * T;
-    const body = c.queenAlive ? 0x7a3b1c : 0x666666;
-    const abdomen = c.queenAlive ? 0xe0b04a : 0x888888;
+    const red = this.colony === 1;
+    const body = c.queenAlive ? (red ? 0xb02a18 : 0x7a3b1c) : 0x666666;
+    const abdomen = c.queenAlive ? (red ? 0xe0603a : 0xe0b04a) : 0x888888;
     q.ellipse(x + 7, y, 9, 5)
       .fill(abdomen)
       .stroke({ color: 0x5a3a10, width: 0.6 });
     q.ellipse(x - 1, y, 4, 3.2).fill(body);
     q.ellipse(x - 6, y, 3.2, 2.8).fill(body);
     if (c.queenAlive) q.circle(x - 6, y - 4.5, 1.3).fill(0xffd84a); // crown
+    if (c.queenAlive && c.queenHp < c.queenMaxHp) {
+      // Health bar while she is being attacked.
+      const w = 24;
+      const f = Math.max(0, c.queenHp / c.queenMaxHp);
+      q.rect(x - w / 2, y - 12, w, 3).fill(0x220000);
+      q.rect(x - w / 2, y - 12, w * f, 3).fill(f > 0.5 ? 0x5ad04a : f > 0.25 ? 0xe0c040 : 0xe04030);
+    }
   }
 
   private drawBrood(c: ColonySnapshot): void {

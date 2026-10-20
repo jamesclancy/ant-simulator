@@ -33,9 +33,10 @@ describe('sim worker', () => {
     send({ type: 'init', config: { seed: 1, initialAnts: 10, tickRate: 20 } });
     expect(posted[0]?.message).toMatchObject({ type: 'ready', config: { seed: 1 } });
     const snap = posted[1]?.message;
-    expect(snap).toMatchObject({ type: 'snapshot', speed: 1, snapshot: { tick: 0, antCount: 10 } });
-    // Ant, recruit-index and (first snapshot only) nest-grid buffers are transferred, not copied.
-    expect(posted[1]?.transfer).toHaveLength(3);
+    // Two colonies of 10.
+    expect(snap).toMatchObject({ type: 'snapshot', speed: 1, snapshot: { tick: 0, antCount: 20 } });
+    // Ant, recruit-index and (first snapshot only) both nest-grid buffers are transferred.
+    expect(posted[1]?.transfer).toHaveLength(4);
   });
 
   it('advances ticks with wall-clock time, scaled by speed', () => {
@@ -71,7 +72,7 @@ describe('sim worker', () => {
 
   it('queues commands while running and applies them on the next tick', () => {
     const { send, snapshots } = setup();
-    send({ type: 'init', config: { initialAnts: 5, tickRate: 20 } });
+    send({ type: 'init', config: { initialAnts: 5, colonies: 1, tickRate: 20 } });
     send({ type: 'commands', commands: [{ type: 'spawnAnts', count: 3, x: 10, y: 10 }] });
     expect(snapshots().at(-1)!.snapshot.antCount).toBe(5);
     vi.advanceTimersByTime(TICK_MS * 2);

@@ -1,4 +1,4 @@
-import type { AntBehaviorConfig, ColonyConfig } from './types';
+import type { AntBehaviorConfig, ColonyConfig, CombatConfig } from './types';
 
 /** Fixed simulation rate. The renderer interpolates between ticks. */
 export const TICK_RATE_HZ = 20;
@@ -6,12 +6,33 @@ export const TICK_MS = 1000 / TICK_RATE_HZ;
 
 /**
  * Floats per ant in a snapshot's `ants` buffer: x, y, heading (radians), carrying
- * (>0 food amount, <0 dirt), layer (0 surface, 1 underground). Underground x/y are in
- * nest-grid world units (`NEST_TILE` per tile), not surface units.
+ * (>0 food amount, <0 dirt), layer, flags. `layer` is 0 on the surface and `1 + c` inside
+ * colony `c`'s nest (see `undergroundLayer`); underground x/y are in nest-grid world units
+ * (`NEST_TILE` per tile), not surface units. `flags` packs colony, caste and fighting, see
+ * `packAntFlags`.
  */
-export const ANT_STRIDE = 5;
+export const ANT_STRIDE = 6;
 /** Offset of the layer value inside one ant's snapshot record. */
 export const ANT_LAYER_OFFSET = 4;
+/** Offset of the packed colony/caste/fighting flags inside one ant's snapshot record. */
+export const ANT_FLAGS_OFFSET = 5;
+
+/** Ant layer value for "underground in colony `colony`'s nest". The surface is 0. */
+export function undergroundLayer(colony: number): number {
+  return 1 + colony;
+}
+
+/** Snapshot flags: bits 0-1 colony, bits 2-3 caste, bit 4 fighting. */
+export function packAntFlags(colony: number, caste: number, fighting: boolean): number {
+  return colony | (caste << 2) | (fighting ? 16 : 0);
+}
+export const flagColony = (flags: number): number => flags & 3;
+export const flagCaste = (flags: number): number => (flags >> 2) & 3;
+export const flagFighting = (flags: number): boolean => (flags & 16) !== 0;
+
+/** Colony ids. The player's (black) colony is always 0. */
+export const PLAYER_COLONY = 0;
+export const RED_COLONY = 1;
 
 /** Underground nest grid: tiles per edge and world units per tile (side view, row 0 = surface). */
 export const NEST_GRID_W = 96;
@@ -20,7 +41,9 @@ export const NEST_TILE = 12;
 
 export const DEFAULT_SEED = 1337;
 export const DEFAULT_WORLD_SIZE = 2048;
+/** Ants spawned per colony at startup. */
 export const DEFAULT_ANT_COUNT = 500;
+export const DEFAULT_COLONY_COUNT = 2;
 export const MAX_ANTS = 20000;
 
 export const SPEED_STEPS = [0.5, 1, 2, 4] as const;
@@ -55,7 +78,7 @@ export const DEFAULT_BEHAVIOR: Readonly<AntBehaviorConfig> = {
 /** Colony economy defaults. Durations are ticks at 20Hz; rates are per tick. */
 export const DEFAULT_COLONY: Readonly<ColonyConfig> = {
   behaviorRatio: { forage: 0.6, dig: 0.2, nurse: 0.2 },
-  casteRatio: { worker: 1, soldier: 0, breeder: 0 },
+  casteRatio: { worker: 0.85, soldier: 0.15, breeder: 0 },
   startFood: 30,
   eggCost: 1,
   maxLayRate: 1 / 12,
@@ -75,4 +98,22 @@ export const DEFAULT_COLONY: Readonly<ColonyConfig> = {
   digMaxWorkers: 6,
   maxOpenFraction: 0.3,
   undergroundSpeedFactor: 1,
+};
+
+/** Combat defaults. HP in hit points, damage per tick at 20Hz, distances in world units. */
+export const DEFAULT_COMBAT: Readonly<CombatConfig> = {
+  contactRange: 6,
+  workerEngageRange: 14,
+  soldierEngageRange: 32,
+  hp: [10, 20, 10],
+  damage: [0.15, 0.35, 0.05],
+  playerDamage: 0.5,
+  queenHp: 1500,
+  corpseFood: 2,
+  alarmDeposit: 0.5,
+  alarmThreshold: 0.02,
+  presenceDeposit: 0.01,
+  patrolRadius: 360,
+  scoutRadius: 220,
+  threatRadius: 420,
 };

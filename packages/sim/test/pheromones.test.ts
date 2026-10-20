@@ -121,7 +121,8 @@ describe('pheromones in sim', () => {
     sim.step();
     expect(sim.snapshot().pheromones).toBeUndefined();
     const s = sim.snapshot({ pheromones: true });
-    expect(s.pheromones!.data.length).toBe(2 * 64 * 64);
-    expect(s.pheromones!.types).toEqual(['food', 'home']);
+    // The player colony's field: its trails, alarm, and the enemy scent it can smell.
+    expect(s.pheromones!.data.length).toBe(4 * 64 * 64);
+    expect(s.pheromones!.types).toEqual(['food', 'home', 'alarm', 'enemy']);
   });
 });

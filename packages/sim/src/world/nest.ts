@@ -1,4 +1,4 @@
-/** The colony's surface nest entrance plus its food store. */
+/** A colony's surface nest entrance plus its food store. */
 export class Nest {
   /** Colony food store; the economy counter. */
   store = 0;
@@ -8,6 +8,8 @@ export class Nest {
     readonly y: number,
     /** Entrance radius in world units. */
     readonly radius: number,
+    /** Owning colony id. */
+    readonly colony = 0,
   ) {}
 
   isAtNest(x: number, y: number): boolean {

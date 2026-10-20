@@ -1,5 +1,5 @@
-import { ANT_CARRY_CAPACITY, AntState } from '@ant/shared';
-import type { AntBehaviorConfig, Command, PlayerInfo, SimEvent } from '@ant/shared';
+import { ANT_CARRY_CAPACITY, AntState, Caste, PLAYER_COLONY } from '@ant/shared';
+import type { AntBehaviorConfig, Command, CombatConfig, PlayerInfo, SimEvent } from '@ant/shared';
 import { turnTowards, wrapAngle } from '../ants/steering';
 import type { AntStore } from '../ants/store';
 import type { PheromoneField } from '../pheromones';
@@ -21,6 +21,8 @@ export const RECRUIT_RADIUS = 260;
 /** Recruits further than this behind the player hurry to catch up. */
 const CATCH_UP_DIST = 40;
 const GOLDEN_ANGLE = 2.399963;
+/** The player ant is tougher than a soldier, so it isn't lost in the first skirmish. */
+const PLAYER_HP_FACTOR = 2;
 
 type PlayerCommand = Extract<Command, { type: `player${string}` }>;
 
@@ -30,9 +32,11 @@ export function isPlayerCommand(cmd: Command): cmd is PlayerCommand {
 
 /**
  * The yellow player ant plus its recruited followers. The player is an ordinary slot in the
- * ant store (so it renders and collides like any ant) whose AI is skipped by `updateAnts`;
- * this controller moves it instead. Recruited ants (`AntState.Recruited`) are likewise skipped
- * there and steered here. The player index is re-resolved if its slot disappears.
+ * ant store (so it renders and fights like any ant) of the black colony (`PLAYER_COLONY`),
+ * always on the surface, whose AI is skipped by `updateAnts`; this controller moves it
+ * instead. Recruited ants (`AntState.Recruited`) are likewise skipped there and steered here.
+ * When ants are removed the sim calls `applyRemap`; if the player ant died, the nearest
+ * surface ant of the colony takes over and a `playerSwapped` event is raised.
  */
 export class PlayerController {
   /** Index of the player ant in the store, or -1 when there are no ants. */
@@ -46,6 +50,10 @@ export class PlayerController {
   /** Recruited ant indices, in recruit order (determines each ant's follow slot). */
   private recruited: number[] = [];
   private events: SimEvent[] = [];
+  /** The player ant died and has not been replaced yet (index of the lost slot). */
+  private lostFrom = -1;
+  private lastX = 0;
+  private lastY = 0;
 
   constructor(
     private ants: AntStore,
@@ -54,6 +62,7 @@ export class PlayerController {
     private cfg: AntBehaviorConfig,
     private rng: Rng,
     private worldSize: number,
+    private combat: CombatConfig,
   ) {}
 
   get recruitCount(): number {
@@ -93,7 +102,8 @@ export class PlayerController {
         break;
       case 'playerPickupDrop':
         if (ants.carrying[i]! > 0) {
-          const { nest, food } = this.world;
+          const { food } = this.world;
+          const nest = this.world.nests[PLAYER_COLONY]!;
           if (nest.isAtNest(ants.x[i]!, ants.y[i]!)) nest.depositFood(ants.carrying[i]!);
           else food.add(ants.x[i]!, ants.y[i]!, ants.carrying[i]!);
           ants.carrying[i] = 0;
@@ -142,40 +152,68 @@ export class PlayerController {
     return out;
   }
 
-  /** An ant was swap-removed into a lower slot (colony starvation): follow it. */
-  remap(from: number, to: number): void {
-    if (this.index === from) this.index = to;
-    // Whatever sat in slot `to` was removed; the ant formerly at `from` now lives there.
-    this.recruited = this.recruited.filter((r) => r !== to).map((r) => (r === from ? to : r));
+  /**
+   * Ants were removed (`compactAnts`): `map[old]` is each ant's new index, -1 if it died.
+   * Follows the player and recruits to their new slots; a dead player is replaced on the
+   * next `ensurePlayer`.
+   */
+  applyRemap(map: Int32Array, oldCount: number): void {
+    const at = (i: number): number => (i >= 0 && i < oldCount ? map[i]! : -1);
+    if (this.index >= 0) {
+      const next = at(this.index);
+      if (next < 0) {
+        this.lostFrom = this.index;
+        this.lastX = this.ants.x[this.index]!;
+        this.lastY = this.ants.y[this.index]!;
+      }
+      this.index = next;
+    }
+    let kept = 0;
+    for (const r of this.recruited) {
+      const n = at(r);
+      if (n >= 0) this.recruited[kept++] = n;
+    }
+    this.recruited.length = kept;
   }
 
-  /** Re-resolve the player if its slot is gone: swap to the ant nearest its last position. */
+  /**
+   * Re-resolve the player if its slot is gone: the black colony's surface ant nearest to
+   * where the player was (or to the nest at startup). With none on the surface there is no
+   * player until one comes up.
+   */
   private ensurePlayer(): void {
     const { ants } = this;
     if (this.index >= 0 && this.index < ants.count) return;
-    const had = this.index >= 0;
-    const from = this.index;
+    const died = this.lostFrom >= 0;
+    const swapped = died || this.index >= 0;
+    const from = died ? this.lostFrom : this.index;
     this.recruited = this.recruited.filter((r) => r < ants.count);
-    if (ants.count === 0) {
-      this.index = -1;
-      this.recruited.length = 0;
-      return;
-    }
-    // Last known position isn't stored; the nest is the sensible anchor.
-    const { nest } = this.world;
-    let best = 0;
+    const nest = this.world.nests[PLAYER_COLONY]!;
+    const ax = died ? this.lastX : nest.x;
+    const ay = died ? this.lastY : nest.y;
+    let best = -1;
     let bestD = Infinity;
     for (let k = 0; k < ants.count; k++) {
-      const d = Math.hypot(ants.x[k]! - nest.x, ants.y[k]! - nest.y);
+      if (ants.colony[k] !== PLAYER_COLONY || ants.layer[k] !== 0) continue;
+      const d = Math.hypot(ants.x[k]! - ax, ants.y[k]! - ay);
       if (d < bestD) {
         bestD = d;
         best = k;
       }
     }
+    if (best < 0) {
+      // Remember a pending swap so the event still fires once someone surfaces.
+      if (swapped && !died) this.lostFrom = from;
+      this.index = -1;
+      this.recruited.length = 0;
+      return;
+    }
+    this.lostFrom = -1;
     this.index = best;
     this.recruited = this.recruited.filter((r) => r !== best);
     ants.state[best] = AntState.Wander;
-    if (had) this.events.push({ type: 'playerSwapped', from, to: best });
+    ants.hp[best] = Math.max(ants.hp[best]!, this.combat.hp[Caste.Soldier] * PLAYER_HP_FACTOR);
+    if (swapped) this.events.push({ type: 'playerSwapped', from, to: best });
   }
 
   private movePlayer(): void {
@@ -221,6 +259,7 @@ export class PlayerController {
     for (let i = 0; i < ants.count; i++) {
       const s = ants.state[i]!;
       if (i === p || (s !== AntState.Wander && s !== AntState.FollowTrail)) continue;
+      if (ants.colony[i] !== PLAYER_COLONY || ants.layer[i] !== 0) continue;
       if (ants.carrying[i]! > 0) continue;
       const dx = ants.x[i]! - px;
       const dy = ants.y[i]! - py;

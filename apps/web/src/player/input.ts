@@ -79,7 +79,7 @@ export class PlayerInput {
     }
   }
 
-  private toast(text: string): void {
+  toast(text: string): void {
     const t = this.el.toast;
     t.textContent = text;
     t.classList.add('show');

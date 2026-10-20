@@ -3,8 +3,8 @@ export interface FoodSource {
   readonly id: number;
   readonly x: number;
   readonly y: number;
-  /** Pickup reach in world units. */
-  readonly radius: number;
+  /** Pickup reach in world units (grows when food is merged in, see `addNear`). */
+  radius: number;
   amount: number;
 }
 
@@ -55,6 +55,20 @@ export class FoodField {
     const id = this.nextId++;
     this.sources.set(id, { id, x: px, y: py, radius: foodRadiusFor(amount), amount });
     this.cells[this.cellIndex(px, py)]!.push(id);
+    return id;
+  }
+
+  /**
+   * Add food to the nearest pile whose centre is within `mergeRadius` of (x, y), or start a
+   * new pile there. Keeps corpse food from turning a battlefield into hundreds of piles.
+   */
+  addNear(x: number, y: number, amount: number, mergeRadius: number): number {
+    if (!(amount > 0)) return -1;
+    const id = this.findFoodNear(x, y, mergeRadius);
+    const s = id >= 0 ? this.sources.get(id)! : undefined;
+    if (!s || Math.hypot(s.x - x, s.y - y) > mergeRadius) return this.add(x, y, amount);
+    s.amount += amount;
+    s.radius = Math.max(s.radius, foodRadiusFor(s.amount));
     return id;
   }
 

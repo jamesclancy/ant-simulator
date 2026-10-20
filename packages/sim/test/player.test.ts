@@ -11,6 +11,7 @@ function makeSim(opts: { ants?: number; seed?: number; pheromones?: boolean } = 
     seed: opts.seed ?? 1,
     worldSize: WORLD,
     initialAnts: opts.ants ?? 300,
+    colonies: 1,
     foodSources: 0,
     behavior: { pheromones: opts.pheromones ?? true },
   });

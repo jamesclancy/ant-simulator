@@ -16,6 +16,7 @@ const now = (): number => performance.now();
 /**
  * Runs the fixed-tick loop and posts transferable snapshots after every tick.
  * Wall-clock time is accumulated and consumed in whole ticks; speed scales the clock.
+ * Once the game is over (`sim.winner !== -1`) the sim stops stepping until the next `init`.
  */
 export function runSimWorker(scope: WorkerScope): void {
   let sim: Sim | null = null;
@@ -39,7 +40,7 @@ export function runSimWorker(scope: WorkerScope): void {
     const transfer: Transferable[] = [snapshot.ants.buffer];
     if (snapshot.player) transfer.push(snapshot.player.recruitedIndices.buffer);
     if (snapshot.pheromones) transfer.push(snapshot.pheromones.data.buffer);
-    if (snapshot.nestGrid) transfer.push(snapshot.nestGrid.cells.buffer);
+    for (const g of snapshot.nestGrids ?? []) transfer.push(g.cells.buffer);
     scope.postMessage({ type: 'snapshot', snapshot, speed: paused ? 0 : speed }, transfer);
   };
 
@@ -51,7 +52,7 @@ export function runSimWorker(scope: WorkerScope): void {
       acc += dt * speed;
       const tickMs = 1000 / sim.config.tickRate;
       let stepped = 0;
-      while (acc >= tickMs && stepped < 8) {
+      while (acc >= tickMs && stepped < 8 && sim.winner === -1) {
         if (pending.length) {
           sim.applyCommands(pending);
           pending = [];
@@ -62,6 +63,10 @@ export function runSimWorker(scope: WorkerScope): void {
       }
       if (stepped) post();
       else if (acc > tickMs) acc = 0;
+      if (sim.winner !== -1) {
+        paused = true;
+        acc = 0;
+      }
     }
     setTimeout(loop, 5);
   };
@@ -70,6 +75,11 @@ export function runSimWorker(scope: WorkerScope): void {
     switch (data.type) {
       case 'init':
         sim = createSim(data.config);
+        paused = false;
+        acc = 0;
+        last = now();
+        pending = [];
+        lastScentTick = -Infinity;
         scope.postMessage({ type: 'ready', config: sim.config });
         post();
         break;

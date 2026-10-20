@@ -1,4 +1,4 @@
-import { AntRole, AntState, NEST_TILE } from '@ant/shared';
+import { AntRole, AntState, Caste, NEST_TILE } from '@ant/shared';
 import type { AntBehaviorConfig } from '@ant/shared';
 import type { AntStore } from '../ants/store';
 import { turnTowards, wrapAngle } from '../ants/steering';
@@ -7,7 +7,8 @@ import type { Rng } from '../rng';
 import { UNREACHABLE } from './flow';
 
 /**
- * One tick for every underground ant (`layer === 1`). Positions are continuous, in nest-grid
+ * One tick for every ant inside `colony`'s nest (`layer === colony.layer`), including enemy
+ * raiders. Ants in `Fight` are held by the combat step and skipped here. Positions are continuous, in nest-grid
  * world units (`NEST_TILE` per tile, y down). Navigation is a BFS flow field per goal
  * (entrance / food chamber / nursery / dig face, see `FlowField`): each tick an ant reads
  * the distance of its own tile and its four neighbours, heads for the centre of the lowest
@@ -21,6 +22,9 @@ import { UNREACHABLE } from './flow';
  * - Dig: walk to the dig face; up to `digMaxWorkers` ants there add one unit of work per
  *   tick, and the one that completes a tile picks up its dirt.
  * - Nurse: walk to a nursery/queen chamber and tend brood (counted in `colony.nursesTending`).
+ * - Soldiers: head out to the surface, or guard the queen chamber while there are intruders.
+ * - Breeders: stay in the nursery (counted, no work yet).
+ * - Enemy raiders: walk to the queen chamber and attack the queen; once she is dead, leave.
  */
 export function updateUndergroundAnts(
   colony: Colony,
@@ -29,7 +33,13 @@ export function updateUndergroundAnts(
   cfg: AntBehaviorConfig,
   tickRate: number,
 ): void {
-  const { x, y, heading, carrying, state, role, layer } = ants;
+  const { x, y, heading, carrying, state, role, layer, caste } = ants;
+  const owner = ants.colony;
+  const here = colony.layer;
+  const id = colony.id;
+  const guard = colony.intruders > 0;
+  const qDist = colony.toQueen.dist;
+  const damage = colony.combat.damage;
   const grid = colony.grid;
   const w = grid.width;
   const tiles = grid.tiles;
@@ -44,7 +54,7 @@ export function updateUndergroundAnts(
   const dDist = colony.toDig.dist;
 
   for (let i = 0; i < ants.count; i++) {
-    if (layer[i] !== 1) continue;
+    if (layer[i] !== here || state[i] === AntState.Fight) continue;
     const px = x[i]!;
     const py = y[i]!;
     const tx = Math.floor(px / NEST_TILE);
@@ -55,8 +65,26 @@ export function updateUndergroundAnts(
 
     // Pick the field for the current job.
     let dist: Uint16Array;
-    let job = 0; // 0 = to entrance, 1 = food, 2 = dig, 3 = nurse
-    if (carried > 0) {
+    let job = 0; // 0 = to entrance, 1 = food, 2 = dig, 3 = nurse, 4 = attack queen, 5 = idle
+    const k = caste[i]!;
+    if (owner[i] !== id) {
+      // Raider: go for the queen; with her dead, head back out.
+      state[i] = AntState.Wander;
+      if (colony.queenAlive) {
+        dist = qDist;
+        job = 4;
+      } else dist = eDist;
+    } else if (k === Caste.Soldier) {
+      state[i] = AntState.Wander;
+      if (guard) {
+        dist = qDist;
+        job = 5;
+      } else dist = eDist;
+    } else if (k === Caste.Breeder) {
+      dist = nDist;
+      job = 5;
+      state[i] = AntState.Nurse;
+    } else if (carried > 0) {
       dist = fDist;
       job = 1;
       state[i] = AntState.CarryFood;
@@ -86,13 +114,15 @@ export function updateUndergroundAnts(
       } else if (job === 1) {
         colony.nest.depositFood(carried);
         carrying[i] = 0;
+      } else if (job === 4) {
+        colony.damageQueen(damage[k]!);
       } else if (job === 2) {
         if (colony.digWorkers < maxWorkers) {
           colony.digWorkers++;
           colony.digProgress++;
           colony.lastDigger = i;
         }
-      } else {
+      } else if (job === 3) {
         colony.nursesTending++;
       }
       mill(ants, i, dist, tiles, w, step * 0.4, rng);

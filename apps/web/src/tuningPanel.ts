@@ -27,10 +27,11 @@ const SLIDERS: { key: NumericKey; min: number; max: number; step: number }[] = [
  * Dev-only panel (enabled with `?debug`) for live-tuning ant behaviour. Every change is sent
  * as a `setBehavior` command, so tuning stays deterministic and replayable.
  */
-export function mountTuningPanel(sim: SimClient, initial: AntBehaviorConfig): void {
+export function mountTuningPanel(sim: SimClient, initial: AntBehaviorConfig): HTMLElement {
   const panel = document.createElement('details');
   panel.className = 'tuning';
-  panel.open = true;
+  // Open on wide screens; on phones it would cover the game.
+  panel.open = window.innerWidth > 600;
   const summary = document.createElement('summary');
   summary.textContent = 'Behaviour';
   panel.appendChild(summary);
@@ -65,4 +66,5 @@ export function mountTuningPanel(sim: SimClient, initial: AntBehaviorConfig): vo
   panel.appendChild(toggle);
 
   document.body.appendChild(panel);
+  return panel;
 }

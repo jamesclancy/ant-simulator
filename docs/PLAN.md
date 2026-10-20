@@ -157,8 +157,8 @@ You are one ant (the "player ant") in a black ant colony fighting a red colony f
 - [ ] Basic HUD (food, population, health), pause/speed controls
 
 ### Phase 3 — Conflict = MVP "Quick Game" (≈3 weeks)
-- [ ] Red colony with AI director
-- [ ] Combat, alarm pheromone, nest raids, queen death = loss/win
+- [x] Red colony with AI director (see [COMBAT.md](COMBAT.md))
+- [x] Combat, alarm pheromone, nest raids, queen death = loss/win
 - [ ] Spider predator
 - [ ] Save/load (snapshot to IndexedDB)
 - [ ] Main menu, settings, tutorial prompts

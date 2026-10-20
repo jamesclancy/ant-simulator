@@ -43,6 +43,7 @@ function forage(ticks: number, behavior: Partial<AntBehaviorConfig> = {}, seed =
     seed,
     worldSize: 1024,
     initialAnts: 400,
+    colonies: 1,
     foodSources: 0,
     behavior,
     colony: NO_ECONOMY,
@@ -99,7 +100,13 @@ describe('foraging', () => {
   });
 
   it('applies live behaviour tuning via setBehavior without touching defaults', () => {
-    const sim = createSim({ seed: 3, worldSize: 512, initialAnts: 50, colony: NO_ECONOMY });
+    const sim = createSim({
+      seed: 3,
+      worldSize: 512,
+      initialAnts: 50,
+      colonies: 1,
+      colony: NO_ECONOMY,
+    });
     sim.applyCommands([{ type: 'setBehavior', params: { speed: 0 } }]);
     expect(sim.config.behavior.speed).toBe(0);
     expect(DEFAULT_BEHAVIOR.speed).not.toBe(0);
