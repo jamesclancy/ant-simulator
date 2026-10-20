@@ -11,3 +11,7 @@ export const DEFAULT_ANT_COUNT = 2000;
 export const MAX_ANTS = 20000;
 
 export const SPEED_STEPS = [0.5, 1, 2, 4] as const;
+
+/** Pheromone layers: field resolution (cells per edge) and snapshot cadence. */
+export const PHEROMONE_RESOLUTION = 256;
+export const PHEROMONE_SNAPSHOT_INTERVAL = 4;

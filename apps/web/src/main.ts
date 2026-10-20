@@ -2,6 +2,7 @@ import { Application, Container, Graphics } from 'pixi.js';
 import { SPEED_STEPS } from '@ant/shared';
 import { AntLayer } from './antLayer';
 import { Camera } from './camera';
+import { ScentOverlay } from './scentOverlay';
 import { SimClient } from './simClient';
 
 async function main(): Promise<void> {
@@ -20,6 +21,8 @@ async function main(): Promise<void> {
   app.stage.addChild(world);
   const camera = new Camera(world, host);
   let ants: AntLayer | null = null;
+  let scent: ScentOverlay | null = null;
+  let scentOn = false;
   let stats = { tick: 0, count: 0 };
 
   const sim = new SimClient({
@@ -31,11 +34,14 @@ async function main(): Promise<void> {
       }
       bg.stroke({ color: 0x3d5c36, width: 1 });
       world.addChildAt(bg, 0);
+      scent = new ScentOverlay(world, config.worldSize);
+      scent.setVisible(scentOn);
       ants = new AntLayer(app.renderer, world);
       camera.focus(config.worldSize / 2, config.worldSize / 2, 1.5);
     },
     onSnapshot(snapshot, speed) {
       ants?.push(snapshot, speed);
+      if (snapshot.pheromones) scent?.update(snapshot.pheromones);
       stats = { tick: snapshot.tick, count: snapshot.antCount };
     },
   });
@@ -45,6 +51,13 @@ async function main(): Promise<void> {
 
   // HUD
   const pause = document.getElementById('pause')!;
+  const scentBtn = document.getElementById('scent')!;
+  scentBtn.addEventListener('click', () => {
+    scentOn = !scentOn;
+    scentBtn.setAttribute('aria-pressed', String(scentOn));
+    scent?.setVisible(scentOn);
+    sim.setScentVision(scentOn);
+  });
   const speeds = document.getElementById('speeds')!;
   const statsEl = document.getElementById('stats')!;
   let paused = false;

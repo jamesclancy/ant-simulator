@@ -1,3 +1,4 @@
+import { PHEROMONE_SNAPSHOT_INTERVAL } from '@ant/shared';
 import type { WorkerInMessage, WorkerOutMessage } from '@ant/shared';
 import type { Command } from '@ant/shared';
 import { createSim } from './sim';
@@ -20,16 +21,24 @@ export function runSimWorker(scope: WorkerScope): void {
   let sim: Sim | null = null;
   let paused = false;
   let speed = 1;
+  let scentVision = false;
+  let sendScentNow = false;
+  let lastScentTick = -Infinity;
   let pending: Command[] = [];
   let last = now();
   let acc = 0;
 
   const post = (): void => {
     if (!sim) return;
-    const snapshot = sim.snapshot();
-    scope.postMessage({ type: 'snapshot', snapshot, speed: paused ? 0 : speed }, [
-      snapshot.ants.buffer,
-    ]);
+    const wantScent =
+      scentVision &&
+      (sendScentNow || paused || sim.tick - lastScentTick >= PHEROMONE_SNAPSHOT_INTERVAL);
+    sendScentNow = false;
+    if (wantScent) lastScentTick = sim.tick;
+    const snapshot = sim.snapshot({ pheromones: wantScent });
+    const transfer: Transferable[] = [snapshot.ants.buffer];
+    if (snapshot.pheromones) transfer.push(snapshot.pheromones.data.buffer);
+    scope.postMessage({ type: 'snapshot', snapshot, speed: paused ? 0 : speed }, transfer);
   };
 
   const loop = (): void => {
@@ -78,6 +87,11 @@ export function runSimWorker(scope: WorkerScope): void {
         break;
       case 'setSpeed':
         speed = data.speed;
+        break;
+      case 'setScentVision':
+        scentVision = data.enabled;
+        sendScentNow = data.enabled;
+        if (paused) post();
         break;
     }
   };
