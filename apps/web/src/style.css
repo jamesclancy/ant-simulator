@@ -53,6 +53,7 @@ body {
   gap: 4px;
 }
 button {
+  touch-action: manipulation;
   min-width: 44px;
   min-height: 44px;
   padding: 0 12px;
@@ -137,4 +138,11 @@ button:disabled {
   #joystick {
     bottom: calc(var(--sab) + 180px);
   }
+}
+[hidden] {
+  display: none !important;
+}
+body.in-nest #player-hud,
+body.in-nest #joystick {
+  display: none;
 }

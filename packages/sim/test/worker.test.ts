@@ -34,8 +34,8 @@ describe('sim worker', () => {
     expect(posted[0]?.message).toMatchObject({ type: 'ready', config: { seed: 1 } });
     const snap = posted[1]?.message;
     expect(snap).toMatchObject({ type: 'snapshot', speed: 1, snapshot: { tick: 0, antCount: 10 } });
-    // Ant and recruit-index buffers are transferred, not copied.
-    expect(posted[1]?.transfer).toHaveLength(2);
+    // Ant, recruit-index and (first snapshot only) nest-grid buffers are transferred, not copied.
+    expect(posted[1]?.transfer).toHaveLength(3);
   });
 
   it('advances ticks with wall-clock time, scaled by speed', () => {

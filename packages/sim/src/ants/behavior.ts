@@ -3,6 +3,7 @@ import type { AntBehaviorConfig } from '@ant/shared';
 import type { PheromoneField } from '../pheromones';
 import type { Rng } from '../rng';
 import type { World } from '../world';
+import type { Colony } from '../colony/colony';
 import type { AntStore } from './store';
 import { senseCell, steerTowardsScent, turnTowards, wrapAngle } from './steering';
 
@@ -35,8 +36,9 @@ export function updateAnts(
   tickRate: number,
   /** Ant index driven by the player controller instead of this loop (-1 = none). */
   playerIndex = -1,
+  colony?: Colony,
 ): void {
-  const { x, y, heading, carrying, state, strength } = ants;
+  const { x, y, heading, carrying, state, strength, layer, role } = ants;
   const { food, nest } = world;
   const size = field.worldSize;
   const res = field.resolution;
@@ -62,6 +64,13 @@ export function updateAnts(
   for (let i = 0; i < ants.count; i++) {
     // The player ant and its recruits are moved by the player controller.
     if (i === playerIndex || state[i] === AntState.Recruited) continue;
+    // Underground ants are stepped by the colony; surface ants with an underground job
+    // (dig / nurse) just walk to the nest mouth and descend.
+    if (layer[i] !== 0) continue;
+    if (colony && role[i] !== 0) {
+      colony.walkToNest(ants, i, rng, cfg, tickRate);
+      continue;
+    }
     let px = x[i]!;
     let py = y[i]!;
     let h = heading[i]!;
@@ -118,6 +127,13 @@ export function updateAnts(
     // --- Interact with nest / food -----------------------------------------------------
     let s = strength[i]!;
     if (loaded) {
+      if (colony && nest.isAtNest(px, py)) {
+        // Go below with the food; it is added to the store once dropped in a food chamber.
+        x[i] = px;
+        y[i] = py;
+        colony.enter(ants, i);
+        continue;
+      }
       if (nest.isAtNest(px, py)) {
         nest.depositFood(carrying[i]!);
         carrying[i] = 0;

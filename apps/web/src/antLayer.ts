@@ -1,11 +1,23 @@
 import { Graphics, Particle, ParticleContainer } from 'pixi.js';
 import type { Renderer, Container, Texture } from 'pixi.js';
-import { ANT_STRIDE, TICK_MS } from '@ant/shared';
+import { ANT_LAYER_OFFSET, ANT_STRIDE, TICK_MS } from '@ant/shared';
 import type { Snapshot } from '@ant/shared';
 
+export interface AntLayerOptions {
+  /** Which layer's ants to show: 0 surface (default), 1 underground. */
+  layer?: number;
+  /** Ant sprite scale. */
+  scale?: number;
+  /** Tint for ants carrying nothing. */
+  tint?: number;
+}
+
+const FOOD_TINT = 0xffc21a;
+const DIRT_TINT = 0x9c6b3a;
+
 /**
- * Batched ant renderer. Holds the previous and latest snapshot and interpolates
- * between them using wall-clock time since the latest snapshot arrived.
+ * Batched ant renderer for one layer (ants of other layers are hidden). Holds the previous
+ * and latest snapshot and interpolates between them using wall-clock time since the latest snapshot arrived.
  */
 export class AntLayer {
   readonly view: ParticleContainer;
@@ -18,13 +30,19 @@ export class AntLayer {
   private tickMs = TICK_MS;
   private shown = 0;
   private playerIndex = -1;
-  private lastStyled = -1;
   private recruitFlags = new Uint8Array(0);
   private recruitIdx: Uint32Array = new Uint32Array(0);
   /** Interpolated position of the player ant after the latest `update()`, if any. */
   readonly playerPos = { x: 0, y: 0, valid: false };
 
-  constructor(renderer: Renderer, parent: Container) {
+  private layer: number;
+  private scale: number;
+  private tint: number;
+
+  constructor(renderer: Renderer, parent: Container, opts: AntLayerOptions = {}) {
+    this.layer = opts.layer ?? 0;
+    this.scale = opts.scale ?? 1.5;
+    this.tint = opts.tint ?? 0x151515;
     const g = new Graphics();
     // Ant glyph pointing +x: three body segments and head.
     g.ellipse(-5, 0, 3.5, 2.5).fill(0xffffff);
@@ -67,9 +85,9 @@ export class AntLayer {
           texture: this.texture,
           anchorX: 0.5,
           anchorY: 0.5,
-          scaleX: 1.5,
-          scaleY: 1.5,
-          tint: 0x151515,
+          scaleX: this.scale,
+          scaleY: this.scale,
+          tint: this.tint,
         }),
       );
       this.shown++;
@@ -90,7 +108,14 @@ export class AntLayer {
       const p = list[i]!;
       const cx = curr[o]!;
       const cy = curr[o + 1]!;
-      if (alpha >= 1) {
+      const layer = curr[o + ANT_LAYER_OFFSET]!;
+      if (layer !== this.layer) {
+        p.alpha = 0;
+        continue;
+      }
+      p.alpha = 1;
+      // No interpolation across a layer change (positions live in different spaces).
+      if (alpha >= 1 || prev[o + ANT_LAYER_OFFSET] !== layer) {
         p.x = cx;
         p.y = cy;
       } else {
@@ -98,25 +123,20 @@ export class AntLayer {
         p.y = prev[o + 1]! + (cy - prev[o + 1]!) * alpha;
       }
       p.rotation = curr[o + 2]!;
-      // Carrying ants are tinted gold.
-      p.tint = curr[o + 3]! > 0 ? 0xffc21a : 0x151515;
+      // Food carriers are gold, dirt carriers brown, recruits dark gold.
+      const c = curr[o + 3]!;
+      p.tint = c > 0 ? FOOD_TINT : c < 0 ? DIRT_TINT : this.tint;
       if (this.recruitFlags[i]) p.tint = 0x8a6a10;
     }
-    const pi = this.playerIndex;
-    if (this.lastStyled >= 0 && this.lastStyled !== pi && this.lastStyled < n) {
-      const old = list[this.lastStyled]!;
-      old.alpha = 1;
-    }
-    this.lastStyled = -1;
     this.playerPos.valid = false;
-    if (pi >= 0 && pi < n) {
+    const pi = this.playerIndex;
+    if (this.layer === 0 && pi >= 0 && pi < n) {
       const p = list[pi]!;
       // The player is drawn by PlayerMarker (bigger, yellow); hide its particle.
       p.alpha = 0;
       this.playerPos.x = p.x;
       this.playerPos.y = p.y;
       this.playerPos.valid = true;
-      this.lastStyled = pi;
     }
   }
 }

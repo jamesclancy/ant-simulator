@@ -1,5 +1,6 @@
 import { Application, Container, Graphics } from 'pixi.js';
-import { SPEED_STEPS } from '@ant/shared';
+import type { Snapshot } from '@ant/shared';
+import { NEST_TILE, SPEED_STEPS } from '@ant/shared';
 import { AntLayer } from './antLayer';
 import { Camera } from './camera';
 import { ScentOverlay } from './scentOverlay';
@@ -9,6 +10,11 @@ import { pauseWhenBackgrounded } from './lifecycle';
 import { mountTuningPanel } from './tuningPanel';
 import { PlayerInput } from './player/input';
 import { PlayerMarker } from './player/marker';
+import { NestView, NEST_BACKGROUND } from './nest/nestView';
+import { ColonyPanel } from './nest/colonyPanel';
+import { DirtMound } from './nest/dirtMound';
+
+const SURFACE_BACKGROUND = 0x1b2a1b;
 
 async function main(): Promise<void> {
   const host = document.getElementById('app')!;
@@ -25,6 +31,16 @@ async function main(): Promise<void> {
   const world = new Container();
   app.stage.addChild(world);
   const camera = new Camera(world, host);
+  // Underground side view: its own container and camera, so each view keeps its position.
+  const nestView = new NestView();
+  app.stage.addChild(nestView.view);
+  const nestCamera = new Camera(nestView.view, host);
+  nestCamera.enabled = false;
+  let nestAnts: AntLayer | null = null;
+  let nestFramed = false;
+  let dirtMound: DirtMound | null = null;
+  let colonyPanel: ColonyPanel | null = null;
+  let layer: 0 | 1 = 0;
   let ants: AntLayer | null = null;
   let scent: ScentOverlay | null = null;
   let scentOn = false;
@@ -32,6 +48,14 @@ async function main(): Promise<void> {
   let marker: PlayerMarker | null = null;
   let playerNow: { x: number; y: number; heading: number; carrying: boolean } | null = null;
   let stats = { tick: 0, count: 0, food: 0 };
+  let latest: Snapshot | null = null;
+
+  const frameNest = (): void => {
+    const g = nestView.gridSize!;
+    const r = host.getBoundingClientRect();
+    const zoom = Math.min(2.5, Math.max(0.5, r.width / (30 * NEST_TILE)));
+    nestCamera.focus((g.entranceX + 0.5) * NEST_TILE, 11 * NEST_TILE, zoom);
+  };
 
   const sim = new SimClient({
     onReady(config) {
@@ -45,8 +69,15 @@ async function main(): Promise<void> {
       scent = new ScentOverlay(world, config.worldSize);
       scent.setVisible(scentOn);
       worldLayer = new WorldLayer(world);
-      ants = new AntLayer(app.renderer, world);
+      dirtMound = new DirtMound(world);
+      ants = new AntLayer(app.renderer, world, { layer: 0 });
+      nestAnts = new AntLayer(app.renderer, nestView.antParent, {
+        layer: 1,
+        scale: 0.75,
+        tint: 0xd9c7a5,
+      });
       marker = new PlayerMarker(world);
+      colonyPanel = new ColonyPanel(document.body, (cmds) => sim.sendCommands(cmds));
       camera.focus(config.worldSize / 2, config.worldSize / 2, 1.5);
       if (new URLSearchParams(location.search).has('debug')) {
         mountTuningPanel(sim, config.behavior);
@@ -54,10 +85,18 @@ async function main(): Promise<void> {
     },
     onSnapshot(snapshot, speed) {
       worldLayer?.update(snapshot);
+      dirtMound?.update(snapshot);
       ants?.push(snapshot, speed);
       const pl = snapshot.player;
       playerNow = pl && { x: pl.x, y: pl.y, heading: pl.heading, carrying: pl.carrying > 0 };
       playerInput.onSnapshot(pl, snapshot.events);
+      nestAnts?.push(snapshot, speed);
+      nestView.update(snapshot.nestGrid, snapshot.colony);
+      if (!nestFramed && nestView.gridSize) {
+        nestFramed = true;
+        frameNest();
+      }
+      latest = snapshot;
       if (snapshot.pheromones) scent?.update(snapshot.pheromones);
       stats = { tick: snapshot.tick, count: snapshot.antCount, food: snapshot.colonyFood };
     },
@@ -73,15 +112,46 @@ async function main(): Promise<void> {
     host,
     send: (commands) => sim.sendCommands(commands),
     toWorld,
-    toolActive: () => placing,
+    // Taps only steer the player on the surface view, and not while placing food.
+    toolActive: () => placing || layer !== 0,
     onTarget: (x, y) => marker?.showTarget(x, y),
   });
 
   app.ticker.add(() => {
+    if (layer !== 0) {
+      nestAnts?.update();
+      return;
+    }
     ants?.update();
     const pos = ants?.playerPos.valid ? ants.playerPos : null;
     marker?.update(pos, playerNow?.heading ?? 0, playerNow?.carrying ?? false, camera.zoom);
     if (pos && playerInput.follow) camera.centerOn(pos.x, pos.y);
+  });
+
+  // Layer switch: HUD button, Tab, or tapping the nest entrance on the surface.
+  const layerBtn = document.getElementById('layer')!;
+  const setLayer = (next: 0 | 1): void => {
+    layer = next;
+    document.body.classList.toggle('in-nest', next === 1);
+    world.visible = next === 0;
+    nestView.view.visible = next === 1;
+    camera.enabled = next === 0;
+    nestCamera.enabled = next === 1;
+    app.renderer.background.color = next === 0 ? SURFACE_BACKGROUND : NEST_BACKGROUND;
+    layerBtn.textContent = next === 0 ? 'Nest' : 'Surface';
+    layerBtn.setAttribute('aria-label', next === 0 ? 'Show nest' : 'Show surface');
+    if (next === 1) {
+      placing = false;
+      foodTool.setAttribute('aria-pressed', 'false');
+    }
+    foodTool.hidden = next === 1;
+    scentBtn.hidden = next === 1;
+  };
+  layerBtn.addEventListener('click', () => setLayer(layer === 0 ? 1 : 0));
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    setLayer(layer === 0 ? 1 : 0);
   });
 
   // HUD
@@ -135,13 +205,19 @@ async function main(): Promise<void> {
   host.addEventListener('pointerup', (e) => {
     const d = down;
     down = null;
-    if (!placing || !d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6) return;
+    if (!d || layer !== 0 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6) return;
     const p = toWorld(e.clientX, e.clientY);
+    if (!placing) {
+      const nest = latest?.nest;
+      if (nest && Math.hypot(p.x - nest.x, p.y - nest.y) <= nest.radius * 1.6) setLayer(1);
+      return;
+    }
     sim.sendCommands([{ type: 'placeFood', x: p.x, y: p.y, amount: 200 }]);
   });
 
   setInterval(() => {
     statsEl.textContent = `${stats.count} ants · food ${Math.floor(stats.food)} · tick ${stats.tick}`;
+    if (latest) colonyPanel?.update(latest);
   }, 250);
 }
 

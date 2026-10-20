@@ -23,6 +23,71 @@ export interface SimConfig {
   nestRadius: number;
   /** Ant steering + foraging tuning. Live-tunable via the `setBehavior` command. */
   behavior: AntBehaviorConfig;
+  /** Colony economy + nest tuning. */
+  colony: ColonyConfig;
+}
+
+/** Fractions of the (worker) population assigned to each job. Normalised on use. */
+export interface BehaviorRatio {
+  forage: number;
+  dig: number;
+  nurse: number;
+}
+
+/** Caste mix for newly emerging adults. Stored now; only workers spawn for the moment. */
+export interface CasteRatio {
+  worker: number;
+  soldier: number;
+  breeder: number;
+}
+
+/** Ant jobs; value is the index into `ants.role` and `BehaviorRatio` order. */
+export const AntRole = { Forage: 0, Dig: 1, Nurse: 2 } as const;
+export type AntRole = (typeof AntRole)[keyof typeof AntRole];
+
+/** Underground tile kinds. Row 0 is the surface line (`Air`) with one `Tunnel` entrance tile. */
+export const TileType = { Soil: 0, Tunnel: 1, Chamber: 2, Rock: 3, Air: 4 } as const;
+export type TileType = (typeof TileType)[keyof typeof TileType];
+
+/** What a `Chamber` tile is used for. Queen and Nursery chambers hold brood. */
+export const ChamberKind = { None: 0, Queen: 1, Food: 2, Nursery: 3 } as const;
+export type ChamberKind = (typeof ChamberKind)[keyof typeof ChamberKind];
+
+/** Colony economy knobs (ticks at `tickRate`; rates are per tick). Defaults: `DEFAULT_COLONY`. */
+export interface ColonyConfig {
+  behaviorRatio: BehaviorRatio;
+  casteRatio: CasteRatio;
+  /** Food in the colony store at start. */
+  startFood: number;
+  /** Food consumed by laying one egg. */
+  eggCost: number;
+  /** Eggs per tick when the store is at or above `layFoodTarget` (scales down linearly below). */
+  maxLayRate: number;
+  layFoodTarget: number;
+  /** Brood capacity per queen/nursery chamber tile. */
+  broodPerTile: number;
+  eggTicks: number;
+  larvaTicks: number;
+  pupaTicks: number;
+  /** Food eaten per larva per tick; larvae stall while the store is empty. */
+  larvaFeedRate: number;
+  /** Extra development speed (multiplier - 1) with full nursing. */
+  nurseBoost: number;
+  /** Tending nurses per brood item needed for full nursing. */
+  nursesPerBrood: number;
+  upkeepPerAnt: number;
+  queenUpkeep: number;
+  /** Fraction of ants dying per tick while the store is empty. */
+  starveRate: number;
+  /** Ticks of empty store before the queen starves. */
+  queenStarveTicks: number;
+  /** Digger-ticks needed to dig one soil tile. */
+  digCost: number;
+  /** Max diggers that contribute at the face per tick. */
+  digMaxWorkers: number;
+  /** Digging stops when this fraction of the grid is open. */
+  maxOpenFraction: number;
+  undergroundSpeedFactor: number;
 }
 
 /**
@@ -67,8 +132,9 @@ export interface AntBehaviorConfig {
 }
 
 /** Input accepted by `createSim` / the worker `init` message: everything optional. */
-export type SimConfigInput = Partial<Omit<SimConfig, 'behavior'>> & {
+export type SimConfigInput = Partial<Omit<SimConfig, 'behavior' | 'colony'>> & {
   behavior?: Partial<AntBehaviorConfig>;
+  colony?: Partial<ColonyConfig>;
 };
 
 /** Per-ant behaviour state, stored in `AntStore.state`. Steering logic lives elsewhere. */
@@ -119,7 +185,10 @@ export type Command =
   /** Recruit the nearest idle ants to follow the player. */
   | { type: 'playerRecruit'; count: 5 | 10 }
   /** Release all recruited ants back to normal foraging. */
-  | { type: 'playerRelease' };
+  | { type: 'playerRelease' }
+  /** Set the forage/dig/nurse allocation (normalised). `colony` defaults to 0 (the player's). */
+  | ({ type: 'setBehaviorRatio'; colony?: number } & BehaviorRatio)
+  | ({ type: 'setCasteRatio'; colony?: number } & CasteRatio);
 
 /** One-shot notifications from the sim, delivered in the snapshot of the tick they happened. */
 export type SimEvent = { type: 'playerSwapped'; from: number; to: number };
@@ -148,10 +217,45 @@ export interface PheromoneSnapshot {
   data: Uint8Array;
 }
 
+/** Underground tile grid. `cells[i] = TileType | ChamberKind << 3`. Sent only when it changes. */
+export interface NestGridSnapshot {
+  version: number;
+  width: number;
+  height: number;
+  /** Column of the surface entrance in row 0. */
+  entranceX: number;
+  cells: Uint8Array;
+}
+
+export interface ColonySnapshot {
+  id: number;
+  queenAlive: boolean;
+  /** Queen's tile (grid coordinates). */
+  queenX: number;
+  queenY: number;
+  /** True once the queen has died: the colony is lost. */
+  lost: boolean;
+  eggs: number;
+  larvae: number;
+  pupae: number;
+  /** Total adult ants. */
+  population: number;
+  underground: number;
+  /** Ants per role, indexed by `AntRole`. */
+  roles: [number, number, number];
+  ratio: BehaviorRatio;
+  /** Brood slots left in nursery chambers. */
+  broodCapacity: number;
+  /** Dirt hauled out so far (drives the surface mound). */
+  dirt: number;
+  /** Open (dug) tiles in the nest. */
+  openTiles: number;
+}
+
 export interface Snapshot {
   tick: number;
   antCount: number;
-  /** Interleaved `[x, y, heading, carrying]` per ant, see `ANT_STRIDE`. Transferable. */
+  /** Interleaved `[x, y, heading, carrying, layer]` per ant, see `ANT_STRIDE`. Transferable. */
   ants: Float32Array;
   /** Present only on some snapshots (every few ticks, or when requested). */
   pheromones?: PheromoneSnapshot;
@@ -163,6 +267,9 @@ export interface Snapshot {
   /** The player ant, or null when the colony has no ants. */
   player: PlayerInfo | null;
   events: SimEvent[];
+  colony: ColonySnapshot;
+  /** Present only when the nest grid changed since the previous snapshot (or on request). */
+  nestGrid?: NestGridSnapshot;
 }
 
 /** Main thread -> worker. */
