@@ -21,12 +21,12 @@ export class AntLayer {
   constructor(renderer: Renderer, parent: Container) {
     const g = new Graphics();
     // Ant glyph pointing +x: three body segments and head.
-    g.ellipse(-5, 0, 3.5, 2.5).fill(0x111111);
-    g.ellipse(0, 0, 2.5, 2).fill(0x1c1c1c);
-    g.ellipse(4.5, 0, 2.5, 2.2).fill(0x111111);
+    g.ellipse(-5, 0, 3.5, 2.5).fill(0xffffff);
+    g.ellipse(0, 0, 2.5, 2).fill(0xdddddd);
+    g.ellipse(4.5, 0, 2.5, 2.2).fill(0xffffff);
     this.texture = renderer.generateTexture({ target: g, resolution: 4 });
     this.view = new ParticleContainer({
-      dynamicProperties: { position: true, rotation: true, vertex: false, color: false },
+      dynamicProperties: { position: true, rotation: true, vertex: false, color: true },
     });
     parent.addChild(this.view);
   }
@@ -50,6 +50,7 @@ export class AntLayer {
           anchorY: 0.5,
           scaleX: 1.5,
           scaleY: 1.5,
+          tint: 0x151515,
         }),
       );
       this.shown++;
@@ -64,7 +65,7 @@ export class AntLayer {
         ? 1
         : Math.min(1, (performance.now() - this.arrived) / this.tickMs);
     const { prev, curr } = this;
-    const list = this.view.particleChildren;
+    const list = this.view.particleChildren as Particle[];
     for (let i = 0; i < n; i++) {
       const o = i * ANT_STRIDE;
       const p = list[i]!;
@@ -78,6 +79,8 @@ export class AntLayer {
         p.y = prev[o + 1]! + (cy - prev[o + 1]!) * alpha;
       }
       p.rotation = curr[o + 2]!;
+      // Carrying ants are tinted gold.
+      p.tint = curr[o + 3]! > 0 ? 0xffc21a : 0x151515;
     }
   }
 }

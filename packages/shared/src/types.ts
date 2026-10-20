@@ -15,6 +15,39 @@ export interface SimConfig {
   tickRate: number;
   /** Pheromone grid cells per world edge (cell size = worldSize / resolution). */
   pheromoneResolution: number;
+  /** Food piles placed at startup. */
+  foodSources: number;
+  /** Food in each starting pile. */
+  foodAmount: number;
+  /** Nest entrance radius in world units. */
+  nestRadius: number;
+}
+
+/** Per-ant behaviour state, stored in `AntStore.state`. Steering logic lives elsewhere. */
+export const AntState = {
+  Wander: 0,
+  FollowTrail: 1,
+  CarryFood: 2,
+  Dig: 3,
+  Nurse: 4,
+  Fight: 5,
+  Flee: 6,
+  Recruited: 7,
+} as const;
+export type AntState = (typeof AntState)[keyof typeof AntState];
+
+export interface FoodInfo {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+  amount: number;
+}
+
+export interface NestInfo {
+  x: number;
+  y: number;
+  radius: number;
 }
 
 /** Commands flow main thread -> sim. The main thread never mutates sim state directly. */
@@ -23,7 +56,9 @@ export type Command =
   | { type: 'clearAnts' }
   | { type: 'depositPheromone'; pheromone: PheromoneType; x: number; y: number; amount: number }
   /** Clears one layer, or all layers when `pheromone` is omitted. */
-  | { type: 'clearPheromones'; pheromone?: PheromoneType };
+  | { type: 'clearPheromones'; pheromone?: PheromoneType }
+  | { type: 'placeFood'; x: number; y: number; amount: number }
+  | { type: 'removeFood'; id: number };
 
 /** Quantized pheromone layers, `layers.length * resolution^2` bytes, layer-major then row-major. */
 export interface PheromoneSnapshot {
@@ -37,10 +72,15 @@ export interface PheromoneSnapshot {
 export interface Snapshot {
   tick: number;
   antCount: number;
-  /** Interleaved `[x, y, heading]` per ant, see `ANT_STRIDE`. Transferable. */
+  /** Interleaved `[x, y, heading, carrying]` per ant, see `ANT_STRIDE`. Transferable. */
   ants: Float32Array;
   /** Present only on some snapshots (every few ticks, or when requested). */
   pheromones?: PheromoneSnapshot;
+  /** Live food piles (small; sent every tick). */
+  food: FoodInfo[];
+  nest: NestInfo;
+  /** Food in the colony store. */
+  colonyFood: number;
 }
 
 /** Main thread -> worker. */

@@ -1,6 +1,9 @@
 import {
   ANT_STRIDE,
   DEFAULT_ANT_COUNT,
+  DEFAULT_FOOD_AMOUNT,
+  DEFAULT_FOOD_SOURCES,
+  DEFAULT_NEST_RADIUS,
   DEFAULT_SEED,
   DEFAULT_WORLD_SIZE,
   MAX_ANTS,
@@ -8,11 +11,15 @@ import {
   PHEROMONE_SNAPSHOT_INTERVAL,
   TICK_RATE_HZ,
 } from '@ant/shared';
+import { AntState } from '@ant/shared';
 import type { Command, SimConfig, Snapshot } from '@ant/shared';
 import { createAntStore } from './ants';
 import type { AntStore } from './ants';
 import { PheromoneField } from './pheromones';
 import { createRng } from './rng';
+import { createWorld } from './world';
+import type { World } from './world';
+import { placeholderForage } from './world/placeholderForage';
 import type { Rng } from './rng';
 
 export interface Sim {
@@ -21,6 +28,8 @@ export interface Sim {
   readonly ants: AntStore;
   /** Pheromone grids. Read via `sample`/`layer`; the sim step owns writes. */
   readonly pheromones: PheromoneField;
+  /** Food piles and the nest. */
+  readonly world: World;
   applyCommands(commands: readonly Command[]): void;
   /** Advance exactly one fixed tick. */
   step(): void;
@@ -43,6 +52,9 @@ export function resolveConfig(partial: Partial<SimConfig> = {}): SimConfig {
     initialAnts: DEFAULT_ANT_COUNT,
     tickRate: TICK_RATE_HZ,
     pheromoneResolution: PHEROMONE_RESOLUTION,
+    foodSources: DEFAULT_FOOD_SOURCES,
+    foodAmount: DEFAULT_FOOD_AMOUNT,
+    nestRadius: DEFAULT_NEST_RADIUS,
     ...partial,
   };
 }
@@ -55,6 +67,8 @@ export function createSim(partial: Partial<SimConfig> = {}): Sim {
     worldSize: config.worldSize,
     resolution: config.pheromoneResolution,
   });
+  // Separate stream so world layout doesn't depend on (or perturb) ant spawning.
+  const world = createWorld(config, createRng(config.seed ^ 0x9e3779b9));
   let tick = 0;
 
   const spawn = (count: number, cx: number, cy: number, spread: number): void => {
@@ -64,6 +78,8 @@ export function createSim(partial: Partial<SimConfig> = {}): Sim {
       ants.x[idx] = clamp(cx + rng.range(-spread, spread), 0, config.worldSize);
       ants.y[idx] = clamp(cy + rng.range(-spread, spread), 0, config.worldSize);
       ants.heading[idx] = rng.range(0, Math.PI * 2);
+      ants.carrying[idx] = 0;
+      ants.state[idx] = AntState.Wander;
     }
   };
 
@@ -77,6 +93,7 @@ export function createSim(partial: Partial<SimConfig> = {}): Sim {
     },
     ants,
     pheromones,
+    world,
     applyCommands(commands) {
       for (const cmd of commands) {
         switch (cmd.type) {
@@ -94,6 +111,12 @@ export function createSim(partial: Partial<SimConfig> = {}): Sim {
           case 'clearPheromones':
             if (!cmd.pheromone || pheromones.has(cmd.pheromone)) pheromones.clear(cmd.pheromone);
             break;
+          case 'placeFood':
+            world.food.add(cmd.x, cmd.y, cmd.amount);
+            break;
+          case 'removeFood':
+            world.food.remove(cmd.id);
+            break;
         }
       }
     },
@@ -104,6 +127,7 @@ export function createSim(partial: Partial<SimConfig> = {}): Sim {
         pheromones.deposit('home', ants.x[i]!, ants.y[i]!, DEMO_HOME_DEPOSIT);
       }
       pheromones.update();
+      placeholderForage(ants, world);
       tick++;
     },
     snapshot(options) {
@@ -113,8 +137,22 @@ export function createSim(partial: Partial<SimConfig> = {}): Sim {
         out[o] = ants.x[i]!;
         out[o + 1] = ants.y[i]!;
         out[o + 2] = ants.heading[i]!;
+        out[o + 3] = ants.carrying[i]!;
       }
-      const snap: Snapshot = { tick, antCount: ants.count, ants: out };
+      const snap: Snapshot = {
+        tick,
+        antCount: ants.count,
+        ants: out,
+        food: [...world.food.list()].map(({ id, x, y, radius, amount }) => ({
+          id,
+          x,
+          y,
+          radius,
+          amount,
+        })),
+        nest: { x: world.nest.x, y: world.nest.y, radius: world.nest.radius },
+        colonyFood: world.nest.store,
+      };
       if (options?.pheromones ?? tick % PHEROMONE_SNAPSHOT_INTERVAL === 0) {
         snap.pheromones = {
           resolution: pheromones.resolution,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ANT_STRIDE } from '@ant/shared';
 import type { Command } from '@ant/shared';
 import { createRng, createSim } from '../src';
 
@@ -46,12 +47,12 @@ describe('sim', () => {
     for (let i = 0; i < 500; i++) sim.step();
     const snap = sim.snapshot();
     expect(snap.antCount).toBe(200);
-    expect(snap.ants.length).toBe(200 * 3);
+    expect(snap.ants.length).toBe(200 * ANT_STRIDE);
     for (let i = 0; i < snap.antCount; i++) {
-      expect(snap.ants[i * 3]!).toBeGreaterThanOrEqual(0);
-      expect(snap.ants[i * 3]!).toBeLessThanOrEqual(512);
-      expect(snap.ants[i * 3 + 1]!).toBeGreaterThanOrEqual(0);
-      expect(snap.ants[i * 3 + 1]!).toBeLessThanOrEqual(512);
+      expect(snap.ants[i * ANT_STRIDE]!).toBeGreaterThanOrEqual(0);
+      expect(snap.ants[i * ANT_STRIDE]!).toBeLessThanOrEqual(512);
+      expect(snap.ants[i * ANT_STRIDE + 1]!).toBeGreaterThanOrEqual(0);
+      expect(snap.ants[i * ANT_STRIDE + 1]!).toBeLessThanOrEqual(512);
     }
   });
 

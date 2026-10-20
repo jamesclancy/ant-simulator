@@ -5,3 +5,5 @@ export type { Rng } from './rng';
 export type { AntStore } from './ants';
 export { PheromoneField } from './pheromones';
 export type { PheromoneFieldOptions, PheromoneLayerConfig } from './pheromones';
+export { createWorld, FoodField, Nest } from './world';
+export type { FoodSource, World } from './world';
