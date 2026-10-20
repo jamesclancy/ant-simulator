@@ -9,6 +9,7 @@ See [docs/PLAN.md](docs/PLAN.md) for the architecture and milestones.
 - `packages/sim` – pure, deterministic TS simulation (no DOM) plus the Web Worker entry
 - `packages/bench` – headless sim benchmark
 - `apps/web` – Vite + PixiJS v8 renderer, input, HUD
+- `apps/mobile` – Capacitor iOS/Android shell wrapping the `apps/web` build
 
 ## Setup
 
@@ -28,6 +29,26 @@ pnpm install
 | `pnpm lint`      | ESLint + Prettier check (`pnpm format` fixes)          |
 | `pnpm typecheck` | `tsc` in every package                                 |
 | `pnpm bench`     | Headless benchmark; optional args: `-- <ants> <ticks>` |
+
+## Mobile (Capacitor)
+
+`apps/mobile` wraps the `apps/web` build in native iOS and Android apps (app id
+`com.jamesclancy.antsimulator`, set in `apps/mobile/capacitor.config.ts`). The sim runs in a Web
+Worker loaded from the bundled files; nothing relies on `SharedArrayBuffer` or COOP/COEP.
+
+Prerequisites:
+
+- **iOS:** macOS with full Xcode (not just Command Line Tools); run `sudo xcode-select -s /Applications/Xcode.app`. Capacitor 8 uses Swift Package Manager, so CocoaPods is not required.
+- **Android:** Android Studio (SDK + platform tools) and JDK 21; set `ANDROID_HOME`.
+
+| Command               | What it does                                                     |
+| --------------------- | ---------------------------------------------------------------- |
+| `pnpm mobile:sync`    | Build the web app and copy it into both native projects          |
+| `pnpm mobile:ios`     | Sync, then open the project in Xcode (run on a simulator/device) |
+| `pnpm mobile:android` | Sync, then open the project in Android Studio                    |
+
+Re-run `pnpm mobile:sync` after any web change. The sim pauses automatically when the app is
+backgrounded.
 
 ## Deploying (Vercel)
 

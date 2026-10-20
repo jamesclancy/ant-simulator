@@ -5,6 +5,7 @@ import { Camera } from './camera';
 import { ScentOverlay } from './scentOverlay';
 import { WorldLayer } from './worldLayer';
 import { SimClient } from './simClient';
+import { pauseWhenBackgrounded } from './lifecycle';
 
 async function main(): Promise<void> {
   const host = document.getElementById('app')!;
@@ -71,6 +72,10 @@ async function main(): Promise<void> {
     pause.textContent = paused ? 'Resume' : 'Pause';
     sim.setPaused(paused);
   });
+  pauseWhenBackgrounded(
+    (p) => sim.setPaused(p),
+    () => paused,
+  );
   const speedButtons = SPEED_STEPS.map((s) => {
     const b = document.createElement('button');
     b.type = 'button';

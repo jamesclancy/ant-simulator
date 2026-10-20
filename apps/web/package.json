@@ -6,6 +6,8 @@
   "dependencies": {
     "@ant/shared": "workspace:*",
     "@ant/sim": "workspace:*",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/core": "^8.5.3",
     "pixi.js": "^8.22.0"
   },
   "scripts": {

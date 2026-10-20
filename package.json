@@ -14,6 +14,9 @@
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "typecheck": "pnpm -r --parallel typecheck",
+    "mobile:sync": "pnpm build && pnpm --filter @ant/mobile exec cap sync",
+    "mobile:ios": "pnpm mobile:sync && pnpm --filter @ant/mobile exec cap open ios",
+    "mobile:android": "pnpm mobile:sync && pnpm --filter @ant/mobile exec cap open android",
     "bench": "pnpm --filter @ant/bench bench"
   },
   "devDependencies": {
