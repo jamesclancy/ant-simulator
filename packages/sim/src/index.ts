@@ -3,6 +3,7 @@ export type { Sim } from './sim';
 export { createRng } from './rng';
 export type { Rng } from './rng';
 export type { AntStore } from './ants';
+export { updateAnts } from './ants';
 export { PheromoneField } from './pheromones';
 export type { PheromoneFieldOptions, PheromoneLayerConfig } from './pheromones';
 export { createWorld, FoodField, Nest } from './world';

@@ -1,4 +1,11 @@
-import type { Command, SimConfig, Snapshot, WorkerInMessage, WorkerOutMessage } from '@ant/shared';
+import type {
+  Command,
+  SimConfig,
+  SimConfigInput,
+  Snapshot,
+  WorkerInMessage,
+  WorkerOutMessage,
+} from '@ant/shared';
 
 export interface SimClientEvents {
   onReady(config: SimConfig): void;
@@ -21,7 +28,7 @@ export class SimClient {
     this.worker.postMessage(msg);
   }
 
-  init(config: Partial<SimConfig> = {}): void {
+  init(config: SimConfigInput = {}): void {
     this.send({ type: 'init', config });
   }
   sendCommands(commands: Command[]): void {
