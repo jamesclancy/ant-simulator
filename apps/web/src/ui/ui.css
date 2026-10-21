@@ -1,0 +1,308 @@
+:root {
+  --ui-scale: 1;
+}
+#menu {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--sat) + 12px) calc(var(--sar) + 12px) calc(var(--sab) + 12px)
+    calc(var(--sal) + 12px);
+  background: rgb(10 20 10 / 62%);
+  color: #e8f0e8;
+  zoom: var(--ui-scale);
+}
+.menu-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(420px, 100%);
+  max-height: 100%;
+  box-sizing: border-box;
+  padding: 20px;
+  border-radius: 16px;
+  background: #1f2a1f;
+  box-shadow: 0 10px 40px rgb(0 0 0 / 50%);
+  -webkit-user-select: text;
+  user-select: text;
+}
+#menu[data-screen='howTo'] .menu-card,
+#menu[data-screen='settings'] .menu-card {
+  width: min(560px, 100%);
+}
+.menu-head h1 {
+  margin: 0;
+  font-size: 28px;
+  color: #ffd84a;
+}
+.menu-sub,
+.menu-hint {
+  margin: 4px 0 0;
+  opacity: 0.8;
+  font-size: 14px;
+}
+.menu-hint {
+  min-height: 1.2em;
+}
+.menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.menu-btn {
+  min-height: 48px;
+  font-size: 16px;
+}
+.menu-btn.primary {
+  background: #7fb069;
+  color: #10200f;
+  font-weight: 600;
+}
+.menu-btn.secondary {
+  background: #2c3b2c;
+}
+.menu-btn.danger {
+  background: #8a2f22;
+}
+.menu-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.menu-label {
+  font-size: 14px;
+  opacity: 0.8;
+}
+.segmented {
+  display: flex;
+  gap: 6px;
+}
+.seg-btn {
+  flex: 1;
+}
+.menu-form input[type='text'] {
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid #4b6b4b;
+  border-radius: 8px;
+  background: #121a12;
+  color: inherit;
+  font: inherit;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.menu-check,
+.menu-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+.menu-check input,
+.menu-row input[type='checkbox'] {
+  width: 24px;
+  height: 24px;
+  accent-color: #7fb069;
+}
+.menu-row {
+  justify-content: space-between;
+}
+.menu-row > span:first-child {
+  flex: 1;
+}
+.menu-row input[type='range'] {
+  flex: 1.2;
+  min-width: 0;
+  min-height: 44px;
+  accent-color: #7fb069;
+}
+.menu-row select {
+  min-height: 44px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid #4b6b4b;
+  background: #121a12;
+  color: inherit;
+  font: inherit;
+}
+.menu-value {
+  width: 3.2em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.menu-scroll {
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.menu-scroll p,
+.menu-scroll ul {
+  margin: 0 0 8px;
+}
+.menu-scroll ul {
+  padding-left: 20px;
+}
+.menu-group {
+  margin: 12px 0 4px;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9fcf8a;
+}
+.menu-table-wrap {
+  overflow-x: auto;
+}
+.menu-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.menu-table th,
+.menu-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid #334733;
+  vertical-align: top;
+}
+.menu-table thead th {
+  color: #ffd84a;
+}
+.menu-table tbody th {
+  font-weight: 600;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid #ffd84a;
+  outline-offset: 2px;
+}
+
+/* Tutorial prompt */
+#tutorial {
+  position: fixed;
+  left: 50%;
+  bottom: calc((var(--hud-h, 80px) + 4px) / var(--ui-scale));
+  transform: translateX(-50%);
+  z-index: 5;
+  width: min(380px, calc((100vw - 24px) / var(--ui-scale)));
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgb(20 30 20 / 92%);
+  border: 1px solid #ffd84a;
+  color: #e8f0e8;
+  font-size: 14px;
+  zoom: var(--ui-scale);
+}
+#tutorial h2 {
+  margin: 0;
+  font-size: 15px;
+  color: #ffd84a;
+}
+#tutorial p {
+  margin: 4px 0 6px;
+}
+.tut-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.tut-count {
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+.tut-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.tut-skip {
+  background: transparent;
+  text-decoration: underline;
+}
+.tut-next {
+  background: #7fb069;
+  color: #10200f;
+  font-weight: 600;
+}
+
+#fps {
+  position: fixed;
+  right: calc(var(--sar) + 8px);
+  top: calc(var(--sat) + 4px);
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 55%);
+  color: #9fcf8a;
+  font:
+    12px ui-monospace,
+    monospace;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* Settings that act on the whole UI */
+#hud,
+#player-hud,
+#toast,
+#colony-panel,
+#gameover {
+  zoom: var(--ui-scale);
+}
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  transition: none !important;
+  animation: none !important;
+}
+/* Joystick: visibility and side come from the Settings. */
+#joystick {
+  display: none;
+}
+:root[data-joystick='on'] #joystick {
+  display: flex;
+}
+@media (pointer: coarse) {
+  :root[data-joystick='auto'] #joystick {
+    display: flex;
+  }
+}
+body.in-nest #joystick {
+  display: none !important;
+}
+:root[data-joystick-side='right'] #joystick {
+  left: auto;
+  right: calc(var(--sar) + 24px);
+}
+
+/* While a menu is up (or no game is running) the HUD stays out of the way. */
+body.in-menu #hud,
+body.in-menu #player-hud,
+body.in-menu #colony-panel,
+body.in-menu #joystick,
+body.in-menu #toast,
+body.in-menu #tutorial {
+  display: none !important;
+}
+body.menu-open #tutorial,
+body.menu-open #joystick {
+  visibility: hidden;
+}
+#joystick {
+  z-index: 6;
+}
+/* Keep the joystick clear of the tutorial card (--tut-h is set while it is showing). */
+:root #joystick {
+  bottom: calc(var(--sab) + 96px + var(--tut-h, 0px));
+}
+@media (max-width: 600px) {
+  :root #joystick {
+    bottom: calc(var(--sab) + 180px + var(--tut-h, 0px));
+  }
+}

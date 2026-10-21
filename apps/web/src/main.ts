@@ -7,7 +7,7 @@ import { ScentOverlay } from './scentOverlay';
 import { WorldLayer } from './worldLayer';
 import { SimClient } from './simClient';
 import { pauseWhenBackgrounded } from './lifecycle';
-import { bindSaves } from './save';
+import { bindSaves, hasSave, loadLatest } from './save';
 import { mountSaveMenu } from './save/saveMenu';
 import { mountTuningPanel } from './tuningPanel';
 import { PlayerInput } from './player/input';
@@ -16,6 +16,11 @@ import { NestView, NEST_BACKGROUND } from './nest/nestView';
 import { ColonyPanel } from './nest/colonyPanel';
 import { DirtMound } from './nest/dirtMound';
 import { SpiderLayer } from './predators/spiderLayer';
+import { App } from '@capacitor/app';
+import { Menu, type NewGameOptions } from './ui/menu';
+import { SettingsStore } from './ui/settings';
+import { bindDocumentSettings, createFpsMeter } from './ui/applySettings';
+import { TutorialPanel } from './ui/tutorialPanel';
 
 const SURFACE_BACKGROUND = 0x1b2a1b;
 /** Underground ant tints (index = colony): light so they read against dark tunnels. */
@@ -34,8 +39,8 @@ const difficulty: Difficulty = (['easy', 'normal', 'hard'] as const).includes(
   : 'normal';
 const randomSeed = (): number => (Math.random() * 0x7fffffff) | 0;
 
-/** Display objects that belong to one game (rebuilt on "Play again"). */
-interface Game {
+/** Display objects that belong to one sim session (rebuilt on every new game). */
+interface Scene {
   scent: ScentOverlay;
   worldLayer: WorldLayer;
   mounds: DirtMound[];
@@ -70,16 +75,27 @@ async function main(): Promise<void> {
   app.stage.addChild(nestRoot);
   const nestCamera = new Camera(nestRoot, host);
   nestCamera.enabled = false;
-  let game: Game | null = null;
+  const settings = new SettingsStore();
+  await settings.load();
+  bindDocumentSettings(settings);
+  const fps = createFpsMeter();
+  /** `menu`: ambient backdrop behind the main menu; `playing`: a real game (maybe paused). */
+  let mode: 'menu' | 'playing' = 'menu';
+  let backdropFrozen = false;
+  let pendingTutorial = false;
+  let lastConfig = { seed: 0, difficulty };
+  const touch = matchMedia('(pointer: coarse)').matches;
+  document.body.classList.add('in-menu');
+  let game: Scene | null = null;
   let colonyPanel: ColonyPanel | null = null;
   let tuningMounted = false;
   let layer: 0 | 1 = 0;
   /** Which colony's nest the underground view shows. */
   let viewNest = PLAYER_COLONY;
   let scentOn = false;
+  let backdropTime = 0;
   let playerNow: { x: number; y: number; heading: number; carrying: boolean } | null = null;
   let latest: Snapshot | null = null;
-  let seed = Number(params.get('seed')) || randomSeed();
 
   const frameNest = (view: NestView): void => {
     const g = view.gridSize!;
@@ -88,7 +104,7 @@ async function main(): Promise<void> {
     nestCamera.focus((g.entranceX + 0.5) * NEST_TILE, 11 * NEST_TILE, zoom);
   };
 
-  const buildGame = (config: SimConfig): Game => {
+  const buildScene = (config: SimConfig): Scene => {
     for (const child of world.removeChildren()) child.destroy({ children: true });
     for (const child of nestRoot.removeChildren()) child.destroy({ children: true });
     const bg = new Graphics();
@@ -134,11 +150,16 @@ async function main(): Promise<void> {
 
   const sim = new SimClient({
     onReady(config) {
-      game = buildGame(config);
+      game = buildScene(config);
       // A new or loaded game: the autosave clock restarts at its first snapshot.
       latest = null;
       lastAutosaveTick = -1;
       hideGameOver();
+      backdropFrozen = false;
+      if (pendingTutorial) {
+        pendingTutorial = false;
+        tutorial.start();
+      }
       viewNest = PLAYER_COLONY;
       setLayer(0);
       if (!colonyPanel) {
@@ -161,6 +182,12 @@ async function main(): Promise<void> {
       const pl = snapshot.player;
       playerNow = pl && { x: pl.x, y: pl.y, heading: pl.heading, carrying: pl.carrying > 0 };
       playerInput.onSnapshot(pl, snapshot.events);
+      if (mode === 'menu' && settings.value.reduceMotion && g.focused && !backdropFrozen) {
+        // Static backdrop: stop the ambient sim once it has drawn a frame.
+        backdropFrozen = true;
+        sim.setPaused(true);
+      }
+      if (mode === 'playing' && tutorial.active) observeTutorial(snapshot);
       g.nests.forEach((n, c) => {
         const colony = snapshot.colonies[c];
         if (!colony) return;
@@ -193,13 +220,12 @@ async function main(): Promise<void> {
       }
       if (snapshot.winner !== -1 && !g.over) {
         g.over = true;
+        tutorial.stop(true);
         showGameOver(snapshot, g);
       }
       warnIntruders(snapshot);
     },
   });
-  sim.init({ seed, difficulty });
-
   const toWorld = (cx: number, cy: number): { x: number; y: number } => {
     const r = host.getBoundingClientRect();
     return world.toLocal({ x: cx - r.left, y: cy - r.top });
@@ -212,11 +238,22 @@ async function main(): Promise<void> {
     // Taps only steer the player on the surface view, and not while placing food.
     toolActive: () => placing || layer !== 0,
     onTarget: (x, y) => game?.marker.showTarget(x, y),
+    keysEnabled: () => mode === 'playing' && !menu.isOpen,
   });
 
   app.ticker.add(() => {
+    fps.tick(app.ticker.FPS);
     const g = game;
     if (!g) return;
+    if (mode === 'menu') {
+      // Slow drift around the home nest behind the menu.
+      const nest = latest?.colonies[PLAYER_COLONY]?.nest;
+      if (nest && !settings.value.reduceMotion) {
+        backdropTime += app.ticker.deltaMS / 1000;
+        const a = backdropTime * 0.06;
+        camera.centerOn(nest.x + Math.cos(a) * 140, nest.y + Math.sin(a * 1.3) * 90);
+      }
+    }
     if (layer !== 0) {
       g.nests[viewNest]?.ants.update();
       return;
@@ -225,7 +262,7 @@ async function main(): Promise<void> {
     g.spiders.tick(app.ticker.deltaMS);
     const pos = g.ants.playerPos.valid ? g.ants.playerPos : null;
     g.marker.update(pos, playerNow?.heading ?? 0, playerNow?.carrying ?? false, camera.zoom);
-    if (pos && playerInput.follow) camera.centerOn(pos.x, pos.y);
+    if (pos && playerInput.follow && mode === 'playing') camera.centerOn(pos.x, pos.y);
   });
 
   // Layer switch: HUD button, Tab, or tapping a nest entrance on the surface.
@@ -266,6 +303,7 @@ async function main(): Promise<void> {
   );
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (mode !== 'playing' || menu.isOpen) return;
     e.preventDefault();
     setLayer(layer === 0 ? 1 : 0);
   });
@@ -273,12 +311,13 @@ async function main(): Promise<void> {
   // HUD
   const pause = document.getElementById('pause')!;
   const scentBtn = document.getElementById('scent')!;
-  scentBtn.addEventListener('click', () => {
-    scentOn = !scentOn;
-    scentBtn.setAttribute('aria-pressed', String(scentOn));
-    game?.scent.setVisible(scentOn);
-    sim.setScentVision(scentOn);
-  });
+  const setScent = (on: boolean): void => {
+    scentOn = on;
+    scentBtn.setAttribute('aria-pressed', String(on));
+    game?.scent.setVisible(on);
+    sim.setScentVision(on);
+  };
+  scentBtn.addEventListener('click', () => setScent(!scentOn));
   const speeds = document.getElementById('speeds')!;
   const statsEl = document.getElementById('stats')!;
   const popBlack = document.getElementById('pop-black')!;
@@ -287,12 +326,8 @@ async function main(): Promise<void> {
   let speed = 1;
   const setPausedUi = (p: boolean): void => {
     paused = p;
-    pause.textContent = paused ? 'Resume' : 'Pause';
   };
-  pause.addEventListener('click', () => {
-    setPausedUi(!paused);
-    sim.setPaused(paused);
-  });
+  pause.addEventListener('click', () => openPause());
   // Saves: autosave slot every AUTOSAVE_TICKS of game time and when the app is backgrounded.
   const saves = bindSaves(sim);
   const saveMenu = mountSaveMenu({
@@ -308,7 +343,7 @@ async function main(): Promise<void> {
   const autosave = (): void => {
     const s = latest;
     // A finished game isn't worth keeping over a playable one.
-    if (!s || s.winner !== -1 || autosaving) return;
+    if (!s || mode !== 'playing' || s.winner !== -1 || autosaving) return;
     autosaving = true;
     lastAutosaveTick = s.tick;
     saves
@@ -384,7 +419,7 @@ async function main(): Promise<void> {
   const title = document.getElementById('gameover-title')!;
   const text = document.getElementById('gameover-text')!;
   const again = document.getElementById('play-again')!;
-  const showGameOver = (s: Snapshot, g: Game): void => {
+  const showGameOver = (s: Snapshot, g: Scene): void => {
     const won = s.winner === PLAYER_COLONY;
     const minutes = Math.round(s.tick / 20 / 60);
     const lostColony = won ? RED_COLONY : PLAYER_COLONY;
@@ -403,15 +438,9 @@ async function main(): Promise<void> {
   function hideGameOver(): void {
     modal.hidden = true;
   }
-  again.addEventListener('click', () => {
-    seed = randomSeed();
-    hideGameOver();
-    setPausedUi(false);
-    latest = null;
-    sim.init({ seed, difficulty });
-    sim.setSpeed(speed);
-    sim.setScentVision(scentOn);
-  });
+  again.addEventListener('click', () =>
+    startGame({ difficulty: lastConfig.difficulty, seed: undefined, tutorial: false }),
+  );
 
   /** ?debug: buttons to provoke fights and raids without waiting. */
   function mountWarControls(panel: HTMLElement): void {
@@ -454,6 +483,157 @@ async function main(): Promise<void> {
     });
     add('Red raid on', () => sim.sendCommands([{ type: 'setRaid', colony: RED_COLONY, on: true }]));
     panel.appendChild(row);
+  }
+
+  // --- Menus, game session flow, tutorial -------------------------------------------------
+  const tutorial = new TutorialPanel(touch, () => settings.update({ tutorialSeen: true }));
+  const observeTutorial = (s: Snapshot): void => {
+    const black = s.colonies[PLAYER_COLONY];
+    if (!black) return;
+    tutorial.observe({
+      player: s.player,
+      nest: black.nest,
+      food: black.food,
+      ratio: black.ratio,
+      casteRatio: black.casteRatio,
+      layer,
+      scentOn,
+      redQueenDead: s.colonies[RED_COLONY]?.lost ?? false,
+    });
+  };
+
+  const menu: Menu = new Menu({
+    settings,
+    difficulty,
+    onNewGame: (options) => startGame(options),
+    onResume: () => resume(),
+    onRestart: () =>
+      startGame({ difficulty: lastConfig.difficulty, seed: lastConfig.seed, tutorial: false }),
+    onQuit: () => startBackdrop(),
+    onReplayTutorial: () => {
+      if (mode === 'menu') {
+        startGame({ difficulty: lastConfig.difficulty, seed: undefined, tutorial: true });
+      } else {
+        resume();
+        tutorial.start();
+      }
+    },
+  });
+  // Continue is offered whenever any save (autosave or manual) exists.
+  const refreshContinue = (): void => {
+    void hasSave().then((any) => menu.setContinue(any ? continueGame : null));
+  };
+
+  const syncMenuClasses = (): void => {
+    document.body.classList.toggle('in-menu', mode === 'menu');
+    document.body.classList.toggle('menu-open', menu.isOpen);
+  };
+
+  /** Start (or restart) a real game on the existing Pixi app and worker; no reload. */
+  function startGame(options: NewGameOptions): void {
+    mode = 'playing';
+    lastConfig = { seed: options.seed ?? randomSeed(), difficulty: options.difficulty };
+    menu.close();
+    syncMenuClasses();
+    tutorial.stop();
+    pendingTutorial = options.tutorial;
+    latest = null;
+    hideGameOver();
+    setPausedUi(false);
+    sim.init(lastConfig);
+    sim.setPaused(false);
+    sim.setSpeed(speed);
+    playerInput.setFollow(settings.value.followCamera);
+    setScent(settings.value.scentVision);
+  }
+
+  /** Resume the most recent save. */
+  function continueGame(): void {
+    mode = 'playing';
+    menu.close();
+    syncMenuClasses();
+    tutorial.stop();
+    pendingTutorial = false;
+    hideGameOver();
+    setPausedUi(false);
+    sim.setPaused(false);
+    playerInput.setFollow(settings.value.followCamera);
+    setScent(settings.value.scentVision);
+    loadLatest()
+      .then((ok) => {
+        if (!ok) startBackdrop();
+      })
+      .catch(() => startBackdrop());
+  }
+
+  /** Back to the main menu over a small ambient colony. */
+  function startBackdrop(): void {
+    mode = 'menu';
+    tutorial.stop();
+    pendingTutorial = false;
+    latest = null;
+    hideGameOver();
+    setPausedUi(false);
+    setScent(false);
+    sim.init({ seed: randomSeed(), colonies: 1, initialAnts: 40, difficulty });
+    sim.setPaused(false);
+    sim.setSpeed(1);
+    refreshContinue();
+    menu.showMain();
+    syncMenuClasses();
+  }
+
+  function openPause(): void {
+    if (mode !== 'playing' || menu.isOpen) return;
+    setPausedUi(true);
+    sim.setPaused(true);
+    menu.showPause();
+    syncMenuClasses();
+  }
+
+  function resume(): void {
+    menu.close();
+    syncMenuClasses();
+    setPausedUi(false);
+    sim.setPaused(false);
+  }
+
+  /** Esc / Android back: up a menu level, or open the pause menu during play. */
+  const handleBack = (native: boolean): void => {
+    if (menu.isOpen) {
+      if (!menu.back() && native) void App.exitApp().catch(() => {});
+      syncMenuClasses();
+    } else if (mode === 'playing' && modal.hidden) openPause();
+  };
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    e.preventDefault();
+    handleBack(false);
+  });
+  void App.addListener('backButton', () => handleBack(true)).catch(() => {});
+
+  settings.subscribe((s, changed) => {
+    fps.el.hidden = !s.showFps;
+    if (mode === 'playing') {
+      if (changed.includes('scentVision')) setScent(s.scentVision);
+      if (changed.includes('followCamera')) playerInput.setFollow(s.followCamera);
+    }
+    if (changed.includes('reduceMotion') && mode === 'menu') {
+      backdropFrozen = false;
+      sim.setPaused(false);
+    }
+    if (changed.includes('tutorialSeen')) return;
+  });
+  fps.el.hidden = !settings.value.showFps;
+
+  if (params.has('play')) {
+    startGame({
+      difficulty,
+      seed: Number(params.get('seed')) || undefined,
+      tutorial: false,
+    });
+  } else {
+    startBackdrop();
   }
 
   setInterval(() => {

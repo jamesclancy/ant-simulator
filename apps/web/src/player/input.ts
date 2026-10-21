@@ -24,6 +24,8 @@ export interface PlayerInputOptions {
   toolActive(): boolean;
   /** A move-to tap landed at this world point. */
   onTarget(x: number, y: number): void;
+  /** False while a menu is open: keyboard shortcuts are ignored. */
+  keysEnabled?(): boolean;
 }
 
 /**
@@ -58,7 +60,8 @@ export class PlayerInput {
     this.bindButtons();
     this.bindPointer();
     this.bindKeys();
-    if (matchMedia('(pointer: coarse)').matches) this.mountJoystick();
+    // Always mounted: the joystick setting (auto / on / off, side) is applied in CSS.
+    this.mountJoystick();
     this.setFollow(true);
   }
 
@@ -144,6 +147,7 @@ export class PlayerInput {
   private bindKeys(): void {
     window.addEventListener('keydown', (e) => {
       if (isTyping(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (this.opts.keysEnabled && !this.opts.keysEnabled()) return;
       const k = e.key.toLowerCase();
       if (k === 'shift') {
         this.shift = true;
