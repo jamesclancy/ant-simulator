@@ -1,6 +1,15 @@
 import { Application, Container, Graphics } from 'pixi.js';
 import type { Difficulty, SimConfig, Snapshot } from '@ant/shared';
-import { Caste, NEST_TILE, PLAYER_COLONY, RED_COLONY, SPEED_STEPS } from '@ant/shared';
+import {
+  ANT_FLAGS_OFFSET,
+  ANT_STRIDE,
+  Caste,
+  NEST_TILE,
+  PLAYER_COLONY,
+  RED_COLONY,
+  SPEED_STEPS,
+  flagFighting,
+} from '@ant/shared';
 import { AntLayer } from './antLayer';
 import { Camera } from './camera';
 import { ScentOverlay } from './scentOverlay';
@@ -19,6 +28,10 @@ import { SpiderLayer } from './predators/spiderLayer';
 import { AntlionLayer } from './hazards/antlionLayer';
 import { WeatherLayer } from './hazards/weatherLayer';
 import { App } from '@capacitor/app';
+import { haptics } from './platform/haptics';
+import { BATTERY_SAVER_FPS, PerfGovernor } from './platform/perfGovernor';
+import { initNativeShell } from './platform/nativeShell';
+import { PROFILES, type DeviceTier, type PerfProfile } from './platform/deviceTier';
 import { Menu, type NewGameOptions } from './ui/menu';
 import { SettingsStore } from './ui/settings';
 import { bindDocumentSettings, createFpsMeter } from './ui/applySettings';
@@ -59,14 +72,28 @@ interface Scene {
 
 async function main(): Promise<void> {
   const host = document.getElementById('app')!;
+  // Android long-press would otherwise raise the context menu / text-selection handles.
+  window.addEventListener('contextmenu', (e) => e.preventDefault());
+  initNativeShell();
+  // ?tier=low|mid|high forces a device tier (testing); otherwise it is detected from the hardware.
+  const forcedTier = params.get('tier');
+  const dpr = window.devicePixelRatio || 1;
+  let profile: PerfProfile = (['low', 'mid', 'high'] as const).includes(forcedTier as DeviceTier)
+    ? PROFILES[forcedTier as DeviceTier]
+    : new PerfGovernor(() => {}).profile;
   const app = new Application();
   await app.init({
     resizeTo: window,
     background: SURFACE_BACKGROUND,
-    antialias: true,
+    antialias: profile.antialias,
     autoDensity: true,
-    resolution: Math.min(window.devicePixelRatio || 1, 2),
+    resolution: Math.min(dpr, profile.maxResolution),
   });
+  const governor = new PerfGovernor((p) => {
+    profile = p;
+    applyProfile();
+  }, profile.tier);
+  governor.locked = forcedTier !== null && forcedTier in PROFILES;
   host.appendChild(app.canvas);
 
   const world = new Container();
@@ -84,6 +111,7 @@ async function main(): Promise<void> {
   await settings.load();
   bindDocumentSettings(settings);
   const fps = createFpsMeter();
+  haptics.enabled = settings.value.haptics;
   /** `menu`: ambient backdrop behind the main menu; `playing`: a real game (maybe paused). */
   let mode: 'menu' | 'playing' = 'menu';
   let backdropFrozen = false;
@@ -101,6 +129,21 @@ async function main(): Promise<void> {
   let backdropTime = 0;
   let playerNow: { x: number; y: number; heading: number; carrying: boolean } | null = null;
   let latest: Snapshot | null = null;
+  const applyProfile = (): void => {
+    app.renderer.resolution = Math.min(dpr, profile.maxResolution);
+    if (game) game.scent.minIntervalMs = profile.scentIntervalMs;
+  };
+  // Player ant under attack: at most one warning buzz every 2 s.
+  let lastHurt = -Infinity;
+  const buzzIfAttacked = (s: Snapshot): void => {
+    const pl = s.player;
+    if (!pl || !s.antCount || pl.index >= s.antCount) return;
+    if (!flagFighting(s.ants[pl.index * ANT_STRIDE + ANT_FLAGS_OFFSET]!)) return;
+    const t = performance.now();
+    if (t - lastHurt < 2000) return;
+    lastHurt = t;
+    haptics.warning();
+  };
 
   const frameNest = (view: NestView): void => {
     const g = view.gridSize!;
@@ -121,6 +164,7 @@ async function main(): Promise<void> {
     world.addChild(bg);
     const scent = new ScentOverlay(world, config.worldSize);
     scent.setVisible(scentOn);
+    scent.minIntervalMs = profile.scentIntervalMs;
     const worldLayer = new WorldLayer(world);
     const mounds: DirtMound[] = [];
     for (let c = 0; c < config.colonies; c++) mounds.push(new DirtMound(world, c));
@@ -158,6 +202,27 @@ async function main(): Promise<void> {
     };
   };
 
+  // ?debug: perf probe for device-throttling runs (see docs/PERF.md).
+  if (debug) {
+    Object.assign(window, {
+      __antPerf: () => ({
+        fps: governor.fps,
+        simMs: governor.simMs,
+        tier: profile.tier,
+        ants: latest?.antCount ?? 0,
+        zoom: camera.zoom,
+      }),
+      __antSpawn: (n: number) => {
+        for (const c of latest?.colonies ?? []) {
+          sim.sendCommands([
+            { type: 'spawnAnts', count: n, x: c.nest.x, y: c.nest.y, colony: c.id },
+          ]);
+        }
+      },
+      __antZoom: (z: number) =>
+        camera.focus(latest?.colonies[0]?.nest.x ?? 0, latest?.colonies[0]?.nest.y ?? 0, z),
+    });
+  }
   const sim = new SimClient({
     onReady(config) {
       game = buildScene(config);
@@ -182,9 +247,11 @@ async function main(): Promise<void> {
         mountWarControls(mountTuningPanel(sim, config.behavior));
       }
     },
-    onSnapshot(snapshot, speed) {
+    onSnapshot(snapshot, speed, simMs) {
       const g = game;
       if (!g) return;
+      if (simMs !== undefined) governor.reportSim(simMs);
+      if (mode === 'playing') buzzIfAttacked(snapshot);
       g.worldLayer.update(snapshot);
       for (const m of g.mounds) m.update(snapshot);
       g.ants.push(snapshot, speed);
@@ -230,6 +297,7 @@ async function main(): Promise<void> {
                 ? 'Your ant drowned in the flood!'
                 : 'A spider ate your ant!',
           );
+          haptics.warning();
         }
         if (ev.type === 'rainWarning') playerInput.toast('Dark clouds gather — rain is coming!');
         if (ev.type === 'rainStarted')
@@ -241,6 +309,7 @@ async function main(): Promise<void> {
         if (ev.type === 'spiderKilled') playerInput.toast('The spider is dead — it left a feast!');
         if (ev.type === 'queenKilled') {
           g.queenCause.set(ev.colony, ev.cause);
+          if (ev.colony === PLAYER_COLONY && mode === 'playing') haptics.heavy();
           if (ev.colony !== PLAYER_COLONY && snapshot.winner === -1) {
             playerInput.toast(`The ${COLONY_NAMES[ev.colony] ?? 'enemy'} queen is dead!`);
           }
@@ -267,10 +336,23 @@ async function main(): Promise<void> {
     toolActive: () => placing || layer !== 0,
     onTarget: (x, y) => game?.marker.showTarget(x, y),
     keysEnabled: () => mode === 'playing' && !menu.isOpen,
+    // Debug only: long-press the ground to drop a food pile (the sandbox tool arrives later).
+    ...(debug
+      ? {
+          onLongPress: (cx: number, cy: number) => {
+            if (layer !== 0 || mode !== 'playing' || menu.isOpen) return;
+            const p = toWorld(cx, cy);
+            sim.sendCommands([{ type: 'placeFood', x: p.x, y: p.y, amount: 200 }]);
+            haptics.light();
+            playerInput.toast('Food placed');
+          },
+        }
+      : {}),
   });
 
   app.ticker.add(() => {
-    fps.tick(app.ticker.FPS);
+    fps.tick(app.ticker.FPS, governor.simMs);
+    governor.frame(performance.now(), document.hidden || mode === 'menu');
     weather.setReduceMotion(settings.value.reduceMotion);
     weather.tick(app.ticker.deltaMS);
     const g = game;
@@ -288,6 +370,7 @@ async function main(): Promise<void> {
       g.nests[viewNest]?.ants.update();
       return;
     }
+    g.ants.setStride(camera.zoom < profile.lodZoom ? profile.lodStride : 1);
     g.ants.update();
     g.spiders.tick(app.ticker.deltaMS);
     g.antlions.tick(app.ticker.deltaMS);
@@ -588,7 +671,7 @@ async function main(): Promise<void> {
     latest = null;
     hideGameOver();
     setPausedUi(false);
-    sim.init(lastConfig);
+    sim.init({ ...lastConfig, maxAnts: governor.maxAnts });
     sim.setPaused(false);
     sim.setSpeed(speed);
     playerInput.setFollow(settings.value.followCamera);
@@ -651,7 +734,11 @@ async function main(): Promise<void> {
     if (menu.isOpen) {
       if (!menu.back() && native) void App.exitApp().catch(() => {});
       syncMenuClasses();
-    } else if (mode === 'playing' && modal.hidden) openPause();
+    } else if (mode === 'playing' && modal.hidden) {
+      // Back from the nest view returns to the surface before it opens the pause menu.
+      if (layer === 1) setLayer(0);
+      else openPause();
+    }
   };
   window.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
@@ -662,6 +749,9 @@ async function main(): Promise<void> {
 
   settings.subscribe((s, changed) => {
     fps.el.hidden = !s.showFps;
+    haptics.enabled = s.haptics;
+    app.ticker.maxFPS = s.batterySaver ? BATTERY_SAVER_FPS : 0;
+    governor.batterySaver = s.batterySaver;
     if (mode === 'playing') {
       if (changed.includes('scentVision')) setScent(s.scentVision);
       if (changed.includes('followCamera')) playerInput.setFollow(s.followCamera);
@@ -673,6 +763,8 @@ async function main(): Promise<void> {
     if (changed.includes('tutorialSeen')) return;
   });
   fps.el.hidden = !settings.value.showFps;
+  app.ticker.maxFPS = settings.value.batterySaver ? BATTERY_SAVER_FPS : 0;
+  governor.batterySaver = settings.value.batterySaver;
 
   // Test hook for the e2e suite: dev and `--mode e2e` builds only, never in production.
   if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') {

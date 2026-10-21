@@ -144,6 +144,7 @@ export function resolveConfig(partial: SimConfigInput = {}): SimConfig {
     seed: DEFAULT_SEED,
     worldSize: DEFAULT_WORLD_SIZE,
     initialAnts: DEFAULT_ANT_COUNT,
+    maxAnts: MAX_ANTS,
     colonies: DEFAULT_COLONY_COUNT,
     difficulty: 'normal',
     tickRate: TICK_RATE_HZ,
@@ -184,7 +185,7 @@ export function createSim(partial: SimConfigInput = {}): Sim {
   config.colonies = Math.max(1, Math.min(2, Math.floor(config.colonies)));
   const n = config.colonies;
   const rng = createRng(config.seed);
-  const ants = createAntStore(MAX_ANTS);
+  const ants = createAntStore(Math.max(1, Math.min(MAX_ANTS, Math.floor(config.maxAnts))));
   const fields = Array.from(
     { length: n },
     () =>

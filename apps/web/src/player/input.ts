@@ -1,8 +1,11 @@
 import type { Command, PlayerInfo, SimEvent } from '@ant/shared';
+import { haptics } from '../platform/haptics';
 
 /** Pointer movement (px) beyond which a press is a pan, not a tap. */
 const TAP_SLOP = 8;
 const JOY_RADIUS = 56;
+/** Hold this long (ms) without moving for a long-press. */
+const LONG_PRESS_MS = 550;
 
 const KEY_DIRS: Record<string, [number, number]> = {
   w: [0, -1],
@@ -26,6 +29,8 @@ export interface PlayerInputOptions {
   onTarget(x: number, y: number): void;
   /** False while a menu is open: keyboard shortcuts are ignored. */
   keysEnabled?(): boolean;
+  /** A finger held still on the ground (not on a HUD control); the tap that follows is dropped. */
+  onLongPress?(x: number, y: number): void;
 }
 
 /**
@@ -96,9 +101,18 @@ export class PlayerInput {
       this.trailToggle = !this.trailToggle;
       this.syncTrail();
     });
-    el.pickup.addEventListener('click', () => this.opts.send([{ type: 'playerPickupDrop' }]));
-    el.r5.addEventListener('click', () => this.opts.send([{ type: 'playerRecruit', count: 5 }]));
-    el.r10.addEventListener('click', () => this.opts.send([{ type: 'playerRecruit', count: 10 }]));
+    el.pickup.addEventListener('click', () => {
+      haptics.light();
+      this.opts.send([{ type: 'playerPickupDrop' }]);
+    });
+    el.r5.addEventListener('click', () => {
+      haptics.light();
+      this.opts.send([{ type: 'playerRecruit', count: 5 }]);
+    });
+    el.r10.addEventListener('click', () => {
+      haptics.light();
+      this.opts.send([{ type: 'playerRecruit', count: 10 }]);
+    });
     el.release.addEventListener('click', () => this.opts.send([{ type: 'playerRelease' }]));
     el.follow.addEventListener('click', () => this.setFollow(!this.follow));
   }
@@ -117,22 +131,35 @@ export class PlayerInput {
     const { host } = this.opts;
     const downs = new Map<number, { x: number; y: number }>();
     let tapOk = false;
+    let pressTimer = 0;
+    const cancelPress = (): void => clearTimeout(pressTimer);
     host.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       downs.set(e.pointerId, { x: e.clientX, y: e.clientY });
       // A second finger turns the gesture into a pinch: never a tap.
       tapOk = downs.size === 1;
+      cancelPress();
+      if (this.opts.onLongPress && tapOk) {
+        const { clientX: x, clientY: y } = e;
+        pressTimer = window.setTimeout(() => {
+          if (!tapOk || this.opts.toolActive()) return;
+          tapOk = false;
+          this.opts.onLongPress?.(x, y);
+        }, LONG_PRESS_MS);
+      }
     });
     host.addEventListener('pointermove', (e) => {
       const d = downs.get(e.pointerId);
       if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) <= TAP_SLOP) return;
       // Dragging pans (Camera), which hands the view back to the user.
       tapOk = false;
+      cancelPress();
       if (this.follow) this.setFollow(false);
     });
     const up = (e: PointerEvent, cancelled: boolean): void => {
       const d = downs.get(e.pointerId);
       downs.delete(e.pointerId);
+      cancelPress();
       if (!d || cancelled || !tapOk || downs.size > 0) return;
       tapOk = false;
       if (this.opts.toolActive()) return;
@@ -157,8 +184,10 @@ export class PlayerInput {
         this.syncDir();
         e.preventDefault();
       } else if (!e.repeat && k === 'r') {
+        haptics.light();
         this.opts.send([{ type: 'playerRecruit', count: 5 }]);
       } else if (!e.repeat && k === 'e') {
+        haptics.light();
         this.opts.send([{ type: 'playerPickupDrop' }]);
       }
     });

@@ -5,15 +5,23 @@
   "type": "module",
   "scripts": {
     "sync": "cap sync",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "art": "node scripts/make-placeholder-art.mjs",
+    "assets": "capacitor-assets generate --ios --android --iconBackgroundColor \"#2f4a2a\" --iconBackgroundColorDark \"#1b2a1b\" --splashBackgroundColor \"#1b2a1b\" --splashBackgroundColorDark \"#1b2a1b\""
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.5.3",
     "@capacitor/filesystem": "^8.1.5",
-    "@capacitor/ios": "^8.5.3"
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.5.3",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.4"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.5.3"
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.3",
+    "sharp": "^0.35.5"
   }
 }

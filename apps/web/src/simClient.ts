@@ -10,7 +10,7 @@ import type {
 
 export interface SimClientEvents {
   onReady(config: SimConfig): void;
-  onSnapshot(snapshot: Snapshot, speed: number): void;
+  onSnapshot(snapshot: Snapshot, speed: number, simMs?: number): void;
 }
 
 /** A `save` / `load` the worker rejected; `code` is `SaveError.code` or 'failed'. */
@@ -41,7 +41,7 @@ export class SimClient {
           if (msg.requestId !== undefined) this.settle(msg.requestId, msg.config);
           break;
         case 'snapshot':
-          events.onSnapshot(msg.snapshot, msg.speed);
+          events.onSnapshot(msg.snapshot, msg.speed, msg.simMs);
           break;
         case 'saved':
           this.settle(msg.requestId, { bytes: msg.bytes, info: msg.info });

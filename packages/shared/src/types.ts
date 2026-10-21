@@ -11,6 +11,8 @@ export interface SimConfig {
   worldSize: number;
   /** Ants spawned per colony at startup. */
   initialAnts: number;
+  /** Hard cap on live ants (all colonies); the performance governor lowers it on weak devices. */
+  maxAnts: number;
   /**
    * Colonies on the map: 2 (default) = black player colony vs red AI colony in opposite
    * corners; 1 = the player's colony alone with its nest at the world centre.
@@ -572,7 +574,13 @@ export type WorkerOutMessage =
       config: SimConfig;
       /** Set when this is the answer to a `load`. */ requestId?: number;
     }
-  | { type: 'snapshot'; snapshot: Snapshot; speed: number }
+  | {
+      type: 'snapshot';
+      snapshot: Snapshot;
+      speed: number;
+      /** Mean wall-clock ms the sim spent per tick since the previous snapshot. */
+      simMs?: number | undefined;
+    }
   | { type: 'saved'; requestId: number; bytes: Uint8Array; info: SaveInfo }
   | {
       type: 'error';

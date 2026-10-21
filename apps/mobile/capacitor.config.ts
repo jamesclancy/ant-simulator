@@ -7,6 +7,11 @@ const config: CapacitorConfig = {
   webDir: '../web/dist',
   backgroundColor: '#1b2a1b',
   ios: { contentInset: 'never', scrollEnabled: false },
+  plugins: {
+    // Android: edge-to-edge with safe-area insets exposed to CSS; light icons on the dark game.
+    SystemBars: { insetsHandling: 'css', style: 'DARK' },
+    // iOS/Android status bar are styled at runtime in apps/web/src/platform/nativeShell.ts.
+  },
 };
 
 export default config;
