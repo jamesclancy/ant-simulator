@@ -56,10 +56,7 @@ const LIMITS_MS: Partial<Record<SfxId, number>> = {
 const BUDGET_BURST = 10;
 const BUDGET_PER_SEC = 24;
 
-/**
- * Event registry: sim event `type` -> sound. Campaign events (matingFlight, patchEntered, ...) are
- * mapped by adding an entry here or calling `AudioDirector.mapEvent` once those events exist.
- */
+/** Event registry: sim event `type` -> sound (add an entry, or call `AudioDirector.mapEvent`). */
 export const EVENT_CUES: Record<string, EventCue> = {
   playerSwapped: { sfx: 'swap' },
   playerEaten: {
@@ -72,6 +69,20 @@ export const EVENT_CUES: Record<string, EventCue> = {
   rainWarning: { sfx: 'rumble', minIntervalMs: 8000 },
   rainStarted: { sfx: 'thunder' },
   queenKilled: { sfx: (ev) => (ev.colony === PLAYER_COLONY ? 'queenLost' : 'queenKilled') },
+  // Campaign.
+  matingFlight: { sfx: (ev) => (ev.colony === PLAYER_COLONY ? 'recruit' : null), gain: 1 },
+  colonyFounded: {
+    sfx: (ev) => (ev.colony === PLAYER_COLONY ? 'deposit' : null),
+    minIntervalMs: 300,
+  },
+  colonyDestroyed: {
+    sfx: (ev) => (ev.colony === PLAYER_COLONY ? 'queenLost' : 'queenKilled'),
+    minIntervalMs: 1000,
+  },
+  patchEntered: { sfx: 'swap' },
+  footstepWarning: { sfx: 'rumble', gain: 0.7, minIntervalMs: 500 },
+  footstep: { sfx: 'thunder', gain: 0.6 },
+  campaignOver: { sfx: (ev) => (ev.won ? 'victory' : 'defeat') },
 };
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
