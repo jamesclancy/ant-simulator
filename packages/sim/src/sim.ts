@@ -3,6 +3,8 @@ import {
   AntRole,
   AntState,
   Caste,
+  DEFAULT_ANTLION,
+  DEFAULT_ANTLION_COUNT,
   DEFAULT_ANT_COUNT,
   DEFAULT_BEHAVIOR,
   DEFAULT_COLONY,
@@ -11,6 +13,7 @@ import {
   DEFAULT_FOOD_AMOUNT,
   DEFAULT_FOOD_SOURCES,
   DEFAULT_NEST_RADIUS,
+  DEFAULT_RAIN,
   DEFAULT_SEED,
   DEFAULT_SPIDER,
   DEFAULT_SPIDER_COUNT,
@@ -38,6 +41,7 @@ import { Colony, takeCensus } from './colony';
 import { Combat } from './combat';
 import { PheromoneField } from './pheromones';
 import { SpiderManager } from './predators';
+import { AntlionManager, Weather, placeAntlions } from './hazards';
 import { PlayerController, isPlayerCommand } from './player';
 import { createRng } from './rng';
 import { createWorld } from './world';
@@ -107,6 +111,10 @@ export interface Sim {
   readonly combat: Combat;
   /** Surface predators. */
   readonly spiders: SpiderManager;
+  /** Antlion pits on the surface. */
+  readonly antlions: AntlionManager;
+  /** Rain and the flooding it causes. */
+  readonly weather: Weather;
   /** -1 while running; else the winning colony id, or -2 if none is left. */
   readonly winner: number;
   applyCommands(commands: readonly Command[]): void;
@@ -130,7 +138,7 @@ export interface Sim {
 }
 
 export function resolveConfig(partial: SimConfigInput = {}): SimConfig {
-  const { behavior, colony, combat, spider, ...rest } = partial;
+  const { behavior, colony, combat, spider, antlion, rain, ...rest } = partial;
   const merged = { ...DEFAULT_COMBAT, ...combat };
   return {
     seed: DEFAULT_SEED,
@@ -144,12 +152,19 @@ export function resolveConfig(partial: SimConfigInput = {}): SimConfig {
     foodAmount: DEFAULT_FOOD_AMOUNT,
     nestRadius: DEFAULT_NEST_RADIUS,
     spiders: DEFAULT_SPIDER_COUNT,
+    antlions: DEFAULT_ANTLION_COUNT,
     ...rest,
     spider: {
       ...DEFAULT_SPIDER,
       ...spider,
       damage: [...(spider?.damage ?? DEFAULT_SPIDER.damage)] as [number, number, number],
     },
+    antlion: {
+      ...DEFAULT_ANTLION,
+      ...antlion,
+      damage: [...(antlion?.damage ?? DEFAULT_ANTLION.damage)] as [number, number, number],
+    },
+    rain: { ...DEFAULT_RAIN, ...rain },
     behavior: { ...DEFAULT_BEHAVIOR, ...behavior },
     colony: { ...DEFAULT_COLONY, ...colony },
     combat: { ...merged, hp: [...merged.hp], damage: [...merged.damage] },
@@ -161,7 +176,7 @@ export function resolveConfig(partial: SimConfigInput = {}): SimConfig {
  * red AI colony start in opposite regions with `initialAnts` each; see `createWorld`.
  *
  * Tick order: census -> combat (hash, fights, damage) -> surface ants -> player ->
- * colonies (underground, economy) -> remove the dead (corpses become food) -> AI directors
+ * colonies (underground, economy) -> antlion pits -> weather (rain, flooding) -> remove the dead (corpses become food) -> AI directors
  * -> pheromone diffusion/evaporation -> game-over check.
  */
 export function createSim(partial: SimConfigInput = {}): Sim {
@@ -231,6 +246,11 @@ export function createSim(partial: SimConfigInput = {}): Sim {
       spiders.add(lx, ly);
     }
   }
+  const antlions = new AntlionManager(config.antlion, config.worldSize, config.seed);
+  for (const site of placeAntlions(config.antlions, config.worldSize, config.seed, world.nests)) {
+    antlions.add(site.x, site.y);
+  }
+  const weather = new Weather(config.rain, config.difficulty, config.seed, colonies);
   const remap = new Int32Array(ants.capacity);
   let tick = 0;
   let winner = -1;
@@ -321,7 +341,13 @@ export function createSim(partial: SimConfigInput = {}): Sim {
 
   const modules: SimModule[] = [
     { key: 'spiders', getState: () => spiders.getState(), setState: (st) => spiders.setState(st) },
-    // Add new stateful systems (weather, ...) here.
+    {
+      key: 'antlions',
+      getState: () => antlions.getState(),
+      setState: (st) => antlions.setState(st),
+    },
+    { key: 'weather', getState: () => weather.getState(), setState: (st) => weather.setState(st) },
+    // Add new stateful systems here.
   ];
 
   const saveInfo = (): SaveInfo => ({
@@ -392,6 +418,8 @@ export function createSim(partial: SimConfigInput = {}): Sim {
     saveInfo,
     serialize: () => encodeSave(getState(), saveInfo()),
     spiders,
+    antlions,
+    weather,
     applyCommands(commands) {
       for (const cmd of commands) {
         if (isPlayerCommand(cmd)) {
@@ -438,6 +466,12 @@ export function createSim(partial: SimConfigInput = {}): Sim {
           case 'spawnSpider':
             spiders.add(clamp(cmd.x, 0, config.worldSize), clamp(cmd.y, 0, config.worldSize));
             break;
+          case 'startRain':
+            weather.start(cmd.ticks, events);
+            break;
+          case 'addAntlion':
+            antlions.add(clamp(cmd.x, 0, config.worldSize), clamp(cmd.y, 0, config.worldSize));
+            break;
           case 'setRaid': {
             const c = colonies[cmd.colony ?? 0];
             if (c) c.raid = cmd.on;
@@ -450,7 +484,17 @@ export function createSim(partial: SimConfigInput = {}): Sim {
       const { behavior, combat: combatCfg, tickRate } = config;
       takeCensus(ants, colonies, combatCfg);
       combat.resolve(ants, colonies, fields, combatCfg, behavior, tickRate, player.index);
-      updateAnts(ants, fields, world, rng, behavior, combatCfg, tickRate, player.index, colonies);
+      updateAnts(
+        ants,
+        fields,
+        world,
+        rng,
+        weather.behaviorFor(behavior),
+        combatCfg,
+        tickRate,
+        player.index,
+        colonies,
+      );
       player.step();
       if (spiders.count > 0) {
         if (n < 2) combat.hash.build(ants); // resolve() only builds it for rival colonies
@@ -466,6 +510,11 @@ export function createSim(partial: SimConfigInput = {}): Sim {
         });
       }
       for (const c of colonies) c.step(ants, rng, behavior, tickRate);
+      const antStep = behavior.speed / tickRate;
+      if (antlions.count > 0) {
+        antlions.step({ ants, world, playerIndex: player.index, antStep, events });
+      }
+      weather.step({ ants, colonies, fields, playerIndex: player.index, antStep, events });
       reap();
       for (const d of directors) d.update(tick);
       for (const f of fields) f.update();
@@ -505,7 +554,11 @@ export function createSim(partial: SimConfigInput = {}): Sim {
         colonies: colonies.map((c) => c.snapshotColony()),
         winner,
         spiders: spiders.info(),
+        antlions: antlions.info(),
+        weather: weather.info(),
       };
+      const water = weather.snapshotWater(tick, options?.nestGrid);
+      if (water.length) snap.waterGrids = water;
       const grids: NestGridSnapshot[] = [];
       for (const c of colonies) {
         const g = c.snapshotGrid(options?.nestGrid);

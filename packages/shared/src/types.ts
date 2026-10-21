@@ -37,6 +37,12 @@ export interface SimConfig {
   spiders: number;
   /** Spider tuning (see `DEFAULT_SPIDER`); `difficulty` scales hp and speed on top. */
   spider: SpiderConfig;
+  /** Antlion pits placed on the surface at startup (0 disables them). */
+  antlions: number;
+  /** Antlion tuning (see `DEFAULT_ANTLION`). */
+  antlion: AntlionConfig;
+  /** Rain / flooding tuning (see `DEFAULT_RAIN`); `difficulty` scales frequency and length. */
+  rain: RainConfig;
 }
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
@@ -112,6 +118,70 @@ export interface SpiderConfig {
   foodDrop: number;
   /** Ticks until a dead spider respawns at its lair. */
   respawnTicks: number;
+}
+
+/**
+ * Antlion pit tuning. Distances in world units, rates per tick at the fixed tick rate.
+ * Ants inside `radius` slide towards the centre and die within `killRadius`, unless they
+ * escape or a big enough mob swarms the antlion.
+ */
+export interface AntlionConfig {
+  /** Slope radius: surface ants inside it are pulled in. */
+  radius: number;
+  /** Ants this close to the centre are eaten. */
+  killRadius: number;
+  /** Pull towards the centre, as a multiple of the ant walking step. */
+  pull: number;
+  /** Chance per tick that a sliding worker scrambles out. */
+  escape: number;
+  /** Escape chance multiplier for soldiers. */
+  soldierEscape: number;
+  /** Escape chance multiplier for the player ant. */
+  playerEscape: number;
+  /** Each other ant in the pit adds this fraction to everyone's escape chance. */
+  crowdEscape: number;
+  hp: number;
+  /** Mob strength (worker 1, soldier `soldierMobWeight`) in the pit that overwhelms the antlion. */
+  mobSize: number;
+  soldierMobWeight: number;
+  /** HP removed per tick by each ant of a swarming mob, indexed by `Caste`. */
+  damage: [number, number, number];
+  /** Food dropped when the antlion dies (the pit stays as inert sand). */
+  foodDrop: number;
+}
+
+/** Rain tuning. Durations are ticks at the fixed tick rate, rates are per tick. */
+export interface RainConfig {
+  /** Showers happen at all (the `startRain` command works regardless). */
+  enabled: boolean;
+  /** Ticks of clear weather between showers (uniform in the range). */
+  minGap: number;
+  maxGap: number;
+  minDuration: number;
+  maxDuration: number;
+  /** A warning event is sent this many ticks before a shower. */
+  warningTicks: number;
+  /** Ticks for the rain to build up to full strength (and to die away). */
+  rampTicks: number;
+  /** Surface pheromone evaporation is multiplied by up to this at full strength. */
+  evaporationMult: number;
+  /** Surface ant speed is multiplied by down to this at full strength. */
+  surfaceSpeed: number;
+  /** Water level added at each nest entrance per tick at full strength (levels are 0..1). */
+  inflow: number;
+  /** Water exchange between neighbouring tunnel tiles per tick (0..~0.3). */
+  flow: number;
+  /** Fraction of the water in a tile soaked into the soil per tick. */
+  seep: number;
+  /** Extra water lost per tick once the rain has stopped. */
+  drain: number;
+  /** Ants in tiles wetter than this take `drownDamage` per tick (scaled by the level). */
+  drownLevel: number;
+  drownDamage: number;
+  /** Brood in a nursery counts as flooded above this level. */
+  broodLevel: number;
+  /** Per tick, fraction of brood lost when every nursery tile is flooded. */
+  broodKill: number;
 }
 
 /** Fractions of the (worker) population assigned to each job. Normalised on use. */
@@ -220,12 +290,14 @@ export interface AntBehaviorConfig {
 
 /** Input accepted by `createSim` / the worker `init` message: everything optional. */
 export type SimConfigInput = Partial<
-  Omit<SimConfig, 'behavior' | 'colony' | 'combat' | 'spider'>
+  Omit<SimConfig, 'behavior' | 'colony' | 'combat' | 'spider' | 'antlion' | 'rain'>
 > & {
   behavior?: Partial<AntBehaviorConfig>;
   colony?: Partial<ColonyConfig>;
   combat?: Partial<CombatConfig>;
   spider?: Partial<SpiderConfig>;
+  antlion?: Partial<AntlionConfig>;
+  rain?: Partial<RainConfig>;
 };
 
 /** Per-ant behaviour state, stored in `AntStore.state`. Steering logic lives elsewhere. */
@@ -292,7 +364,11 @@ export type Command =
   /** Raid mode: the colony's soldiers follow enemy scent to the enemy nest and attack the queen. */
   | { type: 'setRaid'; colony?: number; on: boolean }
   /** Spawn an extra spider (debug / sandbox). Its lair is where it spawns. */
-  | { type: 'spawnSpider'; x: number; y: number };
+  | { type: 'spawnSpider'; x: number; y: number }
+  /** Start a shower now (debug / sandbox); `ticks` defaults to a random duration. */
+  | { type: 'startRain'; ticks?: number }
+  /** Dig an antlion pit at a surface point (debug / sandbox). */
+  | { type: 'addAntlion'; x: number; y: number };
 
 /** One-shot notifications from the sim, delivered in the snapshot of the tick they happened. */
 export type SimEvent =
@@ -301,10 +377,19 @@ export type SimEvent =
   | { type: 'queenKilled'; colony: number; cause: 'combat' | 'starvation' }
   /** The game ended; the sim stops stepping. `winner` is -2 if no colony is left. */
   | { type: 'gameOver'; winner: number }
-  /** A spider ate the player's ant (`playerSwapped` follows when another ant takes over). */
-  | { type: 'playerEaten' }
+  /**
+   * The player's ant was lost: eaten by a spider (no `cause`), pulled into an antlion pit or
+   * drowned in a flooded tunnel (`playerSwapped` follows when another ant takes over).
+   */
+  | { type: 'playerEaten'; cause?: 'antlion' | 'drowned' }
   /** A spider was killed; it leaves a food pile and respawns after a cooldown. */
-  | { type: 'spiderKilled'; x: number; y: number };
+  | { type: 'spiderKilled'; x: number; y: number }
+  /** Rain is about to start (`warningTicks` ahead). */
+  | { type: 'rainWarning'; ticks: number }
+  | { type: 'rainStarted' }
+  | { type: 'rainEnded' }
+  /** A mob killed an antlion; it left food and its pit is now inert sand. */
+  | { type: 'antlionKilled'; x: number; y: number };
 
 /** Spider behaviour states (`SpiderInfo.state`). */
 export const SpiderState = { Lurk: 0, Hunt: 1, Eat: 2, Retreat: 3, Dead: 4 } as const;
@@ -319,6 +404,33 @@ export interface SpiderInfo {
   state: SpiderState;
   hp: number;
   maxHp: number;
+}
+
+/** An antlion pit as shown to the UI. Dead ones stay listed (`alive` false): inert sand. */
+export interface AntlionInfo {
+  id: number;
+  x: number;
+  y: number;
+  /** Slope radius. */
+  radius: number;
+  alive: boolean;
+  hp: number;
+  maxHp: number;
+}
+
+export interface WeatherInfo {
+  raining: boolean;
+  /** 0..1 rain strength (ramps up and down at the edges of a shower). */
+  intensity: number;
+  /** Ticks until the next shower, or -1 while it rains / rain is off. */
+  ticksToRain: number;
+}
+
+/** Water levels of one nest, `round(level * 255)` per tile in the nest-grid layout. */
+export interface WaterGridSnapshot {
+  colony: number;
+  version: number;
+  levels: Uint8Array;
 }
 
 /** The player-controlled (yellow) ant. */
@@ -418,9 +530,13 @@ export interface Snapshot {
   colonies: ColonySnapshot[];
   /** Nest grids that changed since the previous snapshot (or all, on request). */
   nestGrids?: NestGridSnapshot[];
+  /** Nest water levels that changed since the previous snapshot (flooding is throttled to a few updates per second). */
+  waterGrids?: WaterGridSnapshot[];
   /** -1 while the game is running, else the winning colony id (or -2 for nobody). */
   winner: number;
   spiders: SpiderInfo[];
+  antlions: AntlionInfo[];
+  weather: WeatherInfo;
 }
 
 /** Header summary of a save (also what the slot list shows). */

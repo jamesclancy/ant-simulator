@@ -9,6 +9,7 @@ const base = { seed: 11, worldSize: 1024, foodSources: 0, colonies: 1 };
 function sim(initialAnts: number, colony: Partial<ColonyConfig> = {}) {
   return createSim({
     spiders: 0,
+    antlions: 0,
     ...base,
     initialAnts,
     colony: { casteRatio: WORKERS_ONLY, ...colony },

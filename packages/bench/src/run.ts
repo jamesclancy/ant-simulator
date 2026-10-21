@@ -109,3 +109,31 @@ for (const ants of counts) {
     `pheromones 256x256x4 (dense): update=${upd.toFixed(3)}ms/tick quantize=${quant.toFixed(3)}ms/snapshot`,
   );
 }
+
+// Hazards: two colonies x 3000 ants with a shower in full swing (both nests flooding, ants
+// drowning, evaporation up) and three antlion pits, vs the same sim in dry weather.
+{
+  const per = 3000;
+  const make = (rain: boolean): Sim => {
+    const sim = createSim({
+      seed: 1,
+      initialAnts: per,
+      worldSize: 2048,
+      foodAmount: 5000,
+      antlions: 3,
+      rain: { enabled: false },
+    });
+    for (let i = 0; i < warmup; i++) sim.step();
+    if (rain) sim.applyCommands([{ type: 'startRain', ticks: warmup + ticks }]);
+    for (let i = 0; i < 300; i++) sim.step();
+    return sim;
+  };
+  for (const rain of [false, true]) {
+    const sim = make(rain);
+    const samples = measure(sim, ticks);
+    console.log(
+      `hazards (${rain ? 'raining' : 'dry'}): ants=${sim.ants.count} wetTiles=${sim.weather.wetTiles} pits=${sim.antlions.count}`,
+    );
+    report(samples, sim);
+  }
+}

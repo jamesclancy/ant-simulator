@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import { ChamberKind, NEST_TILE, TileType } from '@ant/shared';
-import type { ColonySnapshot, NestGridSnapshot } from '@ant/shared';
+import type { ColonySnapshot, NestGridSnapshot, WaterGridSnapshot } from '@ant/shared';
+import { WaterOverlay } from '../hazards/waterOverlay';
 
 export const NEST_BACKGROUND = 0x140d08;
 const T = NEST_TILE;
@@ -45,6 +46,7 @@ export class NestView {
   private labels = new Container();
   private brood = new Graphics();
   private queen = new Graphics();
+  private water = new WaterOverlay();
   /** Layer ants are drawn into (between tunnels and brood overlays is fine). */
   readonly antParent = new Container();
   private grid: NestGridSnapshot | null = null;
@@ -61,6 +63,7 @@ export class NestView {
       this.brood,
       this.antParent,
       this.queen,
+      this.water.view,
     );
     this.view.visible = false;
   }
@@ -77,6 +80,11 @@ export class NestView {
     if (!this.grid) return;
     this.drawQueen(colony);
     this.drawBrood(colony);
+  }
+
+  /** Flood water for this nest (sent only when it changed). */
+  setWater(w: WaterGridSnapshot | undefined): void {
+    if (w) this.water.update(w.levels, w.version);
   }
 
   private setGrid(g: NestGridSnapshot): void {

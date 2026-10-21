@@ -15,6 +15,8 @@ function scenario(): { sim: Sim; commands: Record<number, Command[]> } {
     ],
     20: [{ type: 'playerMoveTo', x: 700, y: 640 }],
     40: [{ type: 'spawnSpider', x: 600, y: 520 }],
+    60: [{ type: 'addAntlion', x: 400, y: 600 }],
+    330: [{ type: 'startRain', ticks: 700 }],
     50: [
       { type: 'spawnAnts', count: 30, x: mid, y: mid, colony: 0, caste: Caste.Soldier },
       { type: 'spawnAnts', count: 30, x: mid, y: mid + 10, colony: 1, caste: Caste.Soldier },
@@ -52,6 +54,11 @@ describe('save / restore', () => {
     expect(snap.player?.recruitedIndices.length).toBeGreaterThan(0);
 
     expect(snap.spiders).toHaveLength(2);
+
+    // Hazards: mid-shower with water in the nests, plus the extra pit.
+    expect(snap.weather.raining).toBe(true);
+    expect(snap.waterGrids?.some((g) => g.levels.some((v) => v > 0))).toBe(true);
+    expect(snap.antlions.length).toBeGreaterThan(2);
 
     const bytes = sim.serialize();
     const copy = restoreSim(bytes);
