@@ -33,6 +33,10 @@ export interface SimConfig {
   /** Colony economy + nest tuning. */
   colony: ColonyConfig;
   combat: CombatConfig;
+  /** Spiders on the surface at startup (0 disables the predator). */
+  spiders: number;
+  /** Spider tuning (see `DEFAULT_SPIDER`); `difficulty` scales hp and speed on top. */
+  spider: SpiderConfig;
 }
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
@@ -72,6 +76,42 @@ export interface CombatConfig {
   scoutRadius: number;
   /** Enemy ants this close to a nest count as a threat (AI director). */
   threatRadius: number;
+}
+
+/** Spider predator tuning. Distances in world units, rates per tick at the fixed tick rate. */
+export interface SpiderConfig {
+  hp: number;
+  /** Walking speed as a multiple of the ant walking speed. */
+  huntSpeed: number;
+  /** Ants within this distance of the spider's mouth get bitten (one kill per bite). */
+  biteRange: number;
+  /** Ticks the spider stands still eating after a kill. */
+  eatTicks: number;
+  /** Ants this close to the spider hurt it (and flee if the group is too small). */
+  contactRange: number;
+  /** HP removed per tick by an ant in contact, indexed by `Caste`. */
+  damage: [number, number, number];
+  /** The spider notices (and hunts) ants within this distance of itself. */
+  senseRadius: number;
+  /** Hunting never strays further than this from home. */
+  leash: number;
+  /** Retreats to its lair when hp falls below this fraction of max. */
+  retreatFraction: number;
+  /** HP regained per tick while retreating/lurking at home. */
+  regen: number;
+  /** Non-soldier ants within this distance flee unless the group is big enough. */
+  fleeRadius: number;
+  /** Ants within this distance of the spider are counted as the mob. */
+  mobRadius: number;
+  /** Mob strength (worker 1, soldier `soldierMobWeight`) needed for workers to stand and fight. */
+  mobSize: number;
+  soldierMobWeight: number;
+  /** Alarm laid per tick around the spider (in every colony's field). */
+  alarmDeposit: number;
+  /** Food dropped when it dies. */
+  foodDrop: number;
+  /** Ticks until a dead spider respawns at its lair. */
+  respawnTicks: number;
 }
 
 /** Fractions of the (worker) population assigned to each job. Normalised on use. */
@@ -179,10 +219,13 @@ export interface AntBehaviorConfig {
 }
 
 /** Input accepted by `createSim` / the worker `init` message: everything optional. */
-export type SimConfigInput = Partial<Omit<SimConfig, 'behavior' | 'colony' | 'combat'>> & {
+export type SimConfigInput = Partial<
+  Omit<SimConfig, 'behavior' | 'colony' | 'combat' | 'spider'>
+> & {
   behavior?: Partial<AntBehaviorConfig>;
   colony?: Partial<ColonyConfig>;
   combat?: Partial<CombatConfig>;
+  spider?: Partial<SpiderConfig>;
 };
 
 /** Per-ant behaviour state, stored in `AntStore.state`. Steering logic lives elsewhere. */
@@ -247,7 +290,9 @@ export type Command =
   | ({ type: 'setBehaviorRatio'; colony?: number } & BehaviorRatio)
   | ({ type: 'setCasteRatio'; colony?: number } & CasteRatio)
   /** Raid mode: the colony's soldiers follow enemy scent to the enemy nest and attack the queen. */
-  | { type: 'setRaid'; colony?: number; on: boolean };
+  | { type: 'setRaid'; colony?: number; on: boolean }
+  /** Spawn an extra spider (debug / sandbox). Its lair is where it spawns. */
+  | { type: 'spawnSpider'; x: number; y: number };
 
 /** One-shot notifications from the sim, delivered in the snapshot of the tick they happened. */
 export type SimEvent =
@@ -255,7 +300,26 @@ export type SimEvent =
   /** A colony's queen died. When only one colony is left standing, `gameOver` follows. */
   | { type: 'queenKilled'; colony: number; cause: 'combat' | 'starvation' }
   /** The game ended; the sim stops stepping. `winner` is -2 if no colony is left. */
-  | { type: 'gameOver'; winner: number };
+  | { type: 'gameOver'; winner: number }
+  /** A spider ate the player's ant (`playerSwapped` follows when another ant takes over). */
+  | { type: 'playerEaten' }
+  /** A spider was killed; it leaves a food pile and respawns after a cooldown. */
+  | { type: 'spiderKilled'; x: number; y: number };
+
+/** Spider behaviour states (`SpiderInfo.state`). */
+export const SpiderState = { Lurk: 0, Hunt: 1, Eat: 2, Retreat: 3, Dead: 4 } as const;
+export type SpiderState = (typeof SpiderState)[keyof typeof SpiderState];
+
+/** A spider as shown to the UI. Dead spiders are listed too (state `Dead`, hp 0). */
+export interface SpiderInfo {
+  id: number;
+  x: number;
+  y: number;
+  heading: number;
+  state: SpiderState;
+  hp: number;
+  maxHp: number;
+}
 
 /** The player-controlled (yellow) ant. */
 export interface PlayerInfo {
@@ -356,6 +420,7 @@ export interface Snapshot {
   nestGrids?: NestGridSnapshot[];
   /** -1 while the game is running, else the winning colony id (or -2 for nobody). */
   winner: number;
+  spiders: SpiderInfo[];
 }
 
 /** Header summary of a save (also what the slot list shows). */

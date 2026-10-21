@@ -15,6 +15,7 @@ import { PlayerMarker } from './player/marker';
 import { NestView, NEST_BACKGROUND } from './nest/nestView';
 import { ColonyPanel } from './nest/colonyPanel';
 import { DirtMound } from './nest/dirtMound';
+import { SpiderLayer } from './predators/spiderLayer';
 
 const SURFACE_BACKGROUND = 0x1b2a1b;
 /** Underground ant tints (index = colony): light so they read against dark tunnels. */
@@ -39,6 +40,7 @@ interface Game {
   worldLayer: WorldLayer;
   mounds: DirtMound[];
   ants: AntLayer;
+  spiders: SpiderLayer;
   marker: PlayerMarker;
   nests: { view: NestView; ants: AntLayer; framed: boolean }[];
   focused: boolean;
@@ -102,6 +104,7 @@ async function main(): Promise<void> {
     const mounds: DirtMound[] = [];
     for (let c = 0; c < config.colonies; c++) mounds.push(new DirtMound(world, c));
     const ants = new AntLayer(app.renderer, world, { layer: 0 });
+    const spiders = new SpiderLayer(world);
     const nests = [];
     for (let c = 0; c < config.colonies; c++) {
       const view = new NestView(c);
@@ -120,6 +123,7 @@ async function main(): Promise<void> {
       worldLayer,
       mounds,
       ants,
+      spiders,
       marker,
       nests,
       focused: false,
@@ -153,6 +157,7 @@ async function main(): Promise<void> {
       g.worldLayer.update(snapshot);
       for (const m of g.mounds) m.update(snapshot);
       g.ants.push(snapshot, speed);
+      g.spiders.update(snapshot);
       const pl = snapshot.player;
       playerNow = pl && { x: pl.x, y: pl.y, heading: pl.heading, carrying: pl.carrying > 0 };
       playerInput.onSnapshot(pl, snapshot.events);
@@ -177,6 +182,8 @@ async function main(): Promise<void> {
       latest = snapshot;
       if (snapshot.pheromones) g.scent.update(snapshot.pheromones);
       for (const ev of snapshot.events) {
+        if (ev.type === 'playerEaten') playerInput.toast('A spider ate your ant!');
+        if (ev.type === 'spiderKilled') playerInput.toast('The spider is dead — it left a feast!');
         if (ev.type === 'queenKilled') {
           g.queenCause.set(ev.colony, ev.cause);
           if (ev.colony !== PLAYER_COLONY && snapshot.winner === -1) {
@@ -215,6 +222,7 @@ async function main(): Promise<void> {
       return;
     }
     g.ants.update();
+    g.spiders.tick(app.ticker.deltaMS);
     const pos = g.ants.playerPos.valid ? g.ants.playerPos : null;
     g.marker.update(pos, playerNow?.heading ?? 0, playerNow?.carrying ?? false, camera.zoom);
     if (pos && playerInput.follow) camera.centerOn(pos.x, pos.y);
@@ -435,6 +443,14 @@ async function main(): Promise<void> {
       const cy = (s.colonies[0]!.nest.y + s.colonies[1]!.nest.y) / 2;
       soldiers(PLAYER_COLONY, { x: cx - 20, y: cy });
       soldiers(RED_COLONY, { x: cx + 20, y: cy });
+    });
+    add('Spawn spider near our nest', (s) => {
+      const p = near(s, PLAYER_COLONY);
+      sim.sendCommands([{ type: 'spawnSpider', x: p.x + 160, y: p.y }]);
+    });
+    add('Look at spider', (s) => {
+      const sp = s.spiders.find((k) => k.hp > 0);
+      if (sp) camera.focus(sp.x, sp.y, 1.5);
     });
     add('Red raid on', () => sim.sendCommands([{ type: 'setRaid', colony: RED_COLONY, on: true }]));
     panel.appendChild(row);

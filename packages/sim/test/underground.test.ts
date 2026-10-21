@@ -12,7 +12,7 @@ const quiet: Partial<ColonyConfig> = {
 };
 
 function run(ticks: number, colony: Partial<ColonyConfig> = {}, seed = base.seed) {
-  const sim = createSim({ ...base, seed, colony: { ...quiet, ...colony } });
+  const sim = createSim({ spiders: 0, ...base, seed, colony: { ...quiet, ...colony } });
   for (let t = 0; t < ticks; t++) sim.step();
   return sim;
 }
@@ -68,6 +68,7 @@ describe('underground terrain', () => {
 describe('layer transitions', () => {
   it('sends food underground, into the store, and the ant back up', () => {
     const sim = createSim({
+      spiders: 0,
       ...base,
       initialAnts: 0,
       colony: { ...quiet, startFood: 0, behaviorRatio: { forage: 1, dig: 0, nurse: 0 } },
@@ -94,6 +95,7 @@ describe('layer transitions', () => {
 
   it('conserves food while it is carried underground', () => {
     const sim = createSim({
+      spiders: 0,
       ...base,
       initialAnts: 300,
       foodSources: 0,

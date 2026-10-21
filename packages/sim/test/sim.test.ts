@@ -8,6 +8,7 @@ const cfg = {
   worldSize: 512,
   initialAnts: 200,
   colonies: 1,
+  spiders: 0,
   colony: { maxLayRate: 0 }, // keep the population fixed
 };
 
