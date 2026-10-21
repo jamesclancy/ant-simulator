@@ -209,3 +209,35 @@ body.in-nest #joystick {
 .pop-red::before {
   background: #d8381e;
 }
+
+#update-bar {
+  position: fixed;
+  left: 50%;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  background: #1b2a1b;
+  color: #f0ead6;
+  border: 1px solid #5c8a4a;
+  border-radius: 8px;
+  font:
+    14px system-ui,
+    sans-serif;
+}
+#update-bar button {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 0;
+  background: #5c8a4a;
+  color: #fff;
+  font: inherit;
+}
+#update-bar button.secondary {
+  background: transparent;
+  border: 1px solid #5c8a4a;
+}

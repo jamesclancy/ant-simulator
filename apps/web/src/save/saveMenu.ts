@@ -118,6 +118,8 @@ export function mountSaveMenu(opts: SaveMenuOptions): { refresh(): Promise<void>
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !panel.hidden) {
+      // Closing the popup is all Esc does; don't also open the pause menu.
+      e.preventDefault();
       panel.hidden = true;
       button.setAttribute('aria-expanded', 'false');
     }

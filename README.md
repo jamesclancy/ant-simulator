@@ -21,14 +21,15 @@ pnpm install
 
 ## Commands
 
-| Command          | What it does                                           |
-| ---------------- | ------------------------------------------------------ |
-| `pnpm dev`       | Start the web app with hot reload                      |
-| `pnpm build`     | Typecheck and build the web app to `apps/web/dist`     |
-| `pnpm test`      | Run Vitest unit tests (determinism, stepping)          |
-| `pnpm lint`      | ESLint + Prettier check (`pnpm format` fixes)          |
-| `pnpm typecheck` | `tsc` in every package                                 |
-| `pnpm bench`     | Headless benchmark; optional args: `-- <ants> <ticks>` |
+| Command          | What it does                                                                        |
+| ---------------- | ----------------------------------------------------------------------------------- |
+| `pnpm dev`       | Start the web app with hot reload                                                   |
+| `pnpm build`     | Typecheck and build the web app to `apps/web/dist`                                  |
+| `pnpm test`      | Run Vitest unit tests (determinism, stepping)                                       |
+| `pnpm lint`      | ESLint + Prettier check (`pnpm format` fixes)                                       |
+| `pnpm typecheck` | `tsc` in every package                                                              |
+| `pnpm bench`     | Headless benchmark; optional args: `-- <ants> <ticks>`                              |
+| `pnpm e2e`       | Playwright end-to-end tests (first: `pnpm exec playwright install chromium webkit`) |
 
 ## Mobile (Capacitor)
 

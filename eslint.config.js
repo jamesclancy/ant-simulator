@@ -6,6 +6,10 @@ export default tseslint.config(
   {
     ignores: [
       '**/dist/**',
+      '**/dist-e2e/**',
+      'apps/web/scripts/**',
+      'e2e/.results/**',
+      'e2e/.report/**',
       '**/node_modules/**',
       '.claude/**',
       'apps/mobile/ios/**',
