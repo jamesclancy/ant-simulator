@@ -1,3 +1,7 @@
 packages:
   - apps/*
   - packages/*
+
+overrides:
+  # @capacitor/assets pins sharp 0.32, whose native binary needs a build script; 0.35 ships prebuilt.
+  '@capacitor/assets>sharp': '^0.35.5'

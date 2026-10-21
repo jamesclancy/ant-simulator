@@ -17,7 +17,7 @@ export function bindDocumentSettings(store: SettingsStore): void {
 }
 
 /** Frame-rate readout, shown when the "Show FPS" setting is on. */
-export function createFpsMeter(): { el: HTMLElement; tick(fps: number): void } {
+export function createFpsMeter(): { el: HTMLElement; tick(fps: number, simMs?: number): void } {
   const el = document.createElement('div');
   el.id = 'fps';
   el.hidden = true;
@@ -25,11 +25,14 @@ export function createFpsMeter(): { el: HTMLElement; tick(fps: number): void } {
   let last = 0;
   return {
     el,
-    tick(fps) {
+    tick(fps, simMs) {
       const now = performance.now();
       if (el.hidden || now - last < 500) return;
       last = now;
-      el.textContent = `${Math.round(fps)} fps`;
+      el.textContent =
+        simMs && simMs > 0
+          ? `${Math.round(fps)} fps · sim ${simMs.toFixed(1)} ms`
+          : `${Math.round(fps)} fps`;
     },
   };
 }

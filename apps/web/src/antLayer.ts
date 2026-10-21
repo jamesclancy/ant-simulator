@@ -51,6 +51,8 @@ export class AntLayer {
   /** Interpolated position of the player ant after the latest `update()`, if any. */
   readonly playerPos = { x: 0, y: 0, valid: false };
 
+  /** Draw every Nth ant (bigger, so the swarm keeps its look): cheap LOD at low zoom. */
+  private stride = 1;
   private layer: number;
   private scale: number;
   private tints: readonly number[];
@@ -72,6 +74,10 @@ export class AntLayer {
       dynamicProperties: { position: true, rotation: true, vertex: true, color: true },
     });
     parent.addChild(this.view);
+  }
+
+  setStride(stride: number): void {
+    this.stride = Math.max(1, Math.floor(stride));
   }
 
   push(snapshot: Snapshot, speed: number): void {
@@ -122,9 +128,16 @@ export class AntLayer {
         : Math.min(1, (performance.now() - this.arrived) / this.tickMs);
     const { prev, curr } = this;
     const list = this.view.particleChildren as Particle[];
+    const stride = this.stride;
+    // Thinned-out ants are drawn bigger, and the player and its recruits are never dropped.
+    const lodScale = stride > 1 ? Math.sqrt(stride) : 1;
     for (let i = 0; i < n; i++) {
       const o = i * ANT_STRIDE;
       const p = list[i]!;
+      if (stride > 1 && i % stride !== 0 && i !== this.playerIndex && !this.recruitFlags[i]) {
+        p.alpha = 0;
+        continue;
+      }
       const cx = curr[o]!;
       const cy = curr[o + 1]!;
       const layer = curr[o + ANT_LAYER_OFFSET]!;
@@ -144,7 +157,8 @@ export class AntLayer {
       p.rotation = curr[o + 2]!;
       const flags = curr[o + ANT_FLAGS_OFFSET]!;
       const colony = flagColony(flags);
-      const s = flagCaste(flags) === Caste.Soldier ? this.scale * SOLDIER_SCALE : this.scale;
+      const base = this.scale * lodScale;
+      const s = flagCaste(flags) === Caste.Soldier ? base * SOLDIER_SCALE : base;
       p.scaleX = s;
       p.scaleY = s;
       // Fighters flash; food carriers are gold, dirt carriers brown, recruits dark gold.

@@ -30,7 +30,7 @@ export function runSimWorker(scope: WorkerScope): void {
   let last = now();
   let acc = 0;
 
-  const post = (): void => {
+  const post = (simMs?: number): void => {
     if (!sim) return;
     const wantScent =
       scentVision &&
@@ -43,7 +43,7 @@ export function runSimWorker(scope: WorkerScope): void {
     if (snapshot.pheromones) transfer.push(snapshot.pheromones.data.buffer);
     for (const g of snapshot.nestGrids ?? []) transfer.push(g.cells.buffer);
     for (const g of snapshot.waterGrids ?? []) transfer.push(g.levels.buffer);
-    scope.postMessage({ type: 'snapshot', snapshot, speed: paused ? 0 : speed }, transfer);
+    scope.postMessage({ type: 'snapshot', snapshot, speed: paused ? 0 : speed, simMs }, transfer);
   };
 
   const loop = (): void => {
@@ -54,6 +54,7 @@ export function runSimWorker(scope: WorkerScope): void {
       acc += dt * speed;
       const tickMs = 1000 / sim.config.tickRate;
       let stepped = 0;
+      const stepStart = now();
       while (acc >= tickMs && stepped < 8 && sim.winner === -1) {
         if (pending.length) {
           sim.applyCommands(pending);
@@ -63,7 +64,7 @@ export function runSimWorker(scope: WorkerScope): void {
         acc -= tickMs;
         stepped++;
       }
-      if (stepped) post();
+      if (stepped) post((now() - stepStart) / stepped);
       else if (acc > tickMs) acc = 0;
       if (sim.winner !== -1) {
         paused = true;

@@ -16,6 +16,10 @@ export interface Settings {
   soundVolume: number;
   musicVolume: number;
   showFps: boolean;
+  /** Vibrate on pickup/recruit, attacks and queen death (native app only). */
+  haptics: boolean;
+  /** Cap rendering at 30 fps to save battery and heat. */
+  batterySaver: boolean;
   /** The first-game tutorial has been finished or skipped. */
   tutorialSeen: boolean;
 }
@@ -34,6 +38,8 @@ export const DEFAULT_SETTINGS: Settings = {
   soundVolume: 0.8,
   musicVolume: 0.5,
   showFps: false,
+  haptics: true,
+  batterySaver: false,
   tutorialSeen: false,
 };
 
@@ -62,6 +68,8 @@ export function sanitizeSettings(raw: unknown, base: Settings = DEFAULT_SETTINGS
     soundVolume: clamp(r.soundVolume, 0, 1, base.soundVolume),
     musicVolume: clamp(r.musicVolume, 0, 1, base.musicVolume),
     showFps: bool(r.showFps, base.showFps),
+    haptics: bool(r.haptics, base.haptics),
+    batterySaver: bool(r.batterySaver, base.batterySaver),
     tutorialSeen: bool(r.tutorialSeen, base.tutorialSeen),
   };
 }

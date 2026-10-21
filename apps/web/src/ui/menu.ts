@@ -286,7 +286,7 @@ export class Menu {
     };
     const toggle = (
       label: string,
-      key: 'scentVision' | 'followCamera' | 'reduceMotion' | 'showFps',
+      key: 'scentVision' | 'followCamera' | 'reduceMotion' | 'showFps' | 'haptics' | 'batterySaver',
     ): HTMLElement => {
       const input = h('input', { type: 'checkbox' });
       input.addEventListener('change', () => settings.update({ [key]: input.checked }));
@@ -350,6 +350,8 @@ export class Menu {
       slider('UI scale', 'uiScale', UI_SCALE_MIN, UI_SCALE_MAX, 0.05),
       toggle('Reduce motion', 'reduceMotion'),
       toggle('Show FPS', 'showFps'),
+      toggle('Battery saver (30 fps)', 'batterySaver'),
+      toggle('Haptics', 'haptics'),
       h('h2', { class: 'menu-group' }, 'Audio'),
       slider('Sound volume', 'soundVolume', 0, 1, 0.05),
       slider('Music volume', 'musicVolume', 0, 1, 0.05),

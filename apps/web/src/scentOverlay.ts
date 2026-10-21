@@ -24,6 +24,9 @@ export class ScentOverlay {
   private pixels: Uint32Array | null = null;
   private texture: Texture | null = null;
   private worldSize: number;
+  /** Minimum ms between repaints (the governor raises it on slow devices). */
+  minIntervalMs = 0;
+  private lastPaint = -Infinity;
 
   constructor(parent: Container, worldSize: number) {
     this.worldSize = worldSize;
@@ -42,6 +45,9 @@ export class ScentOverlay {
 
   /** Repaint from a snapshot's pheromone block. Cheap enough at ~5Hz for 256². */
   update(p: PheromoneSnapshot): void {
+    const t = performance.now();
+    if (t - this.lastPaint < this.minIntervalMs) return;
+    this.lastPaint = t;
     const res = p.resolution;
     if (!this.image || this.canvas.width !== res) this.resize(res);
     const px = this.pixels!;
