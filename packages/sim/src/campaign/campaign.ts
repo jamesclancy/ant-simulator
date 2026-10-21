@@ -78,6 +78,8 @@ export class Campaign {
       },
     ],
     saveInfo: () => ({
+      // The slot list shows time played: the whole campaign's, not this patch's.
+      tick: this.s.tick,
       campaign: {
         owned: this.owned('black'),
         patches: this.defs.length,

@@ -25,6 +25,18 @@
   background: #ffd400;
   color: #2a2000;
 }
+@media (max-width: 700px) {
+  /* Phones: the player bar wraps to two rows across the top; sit below it on the right. */
+  #campaign-hud {
+    left: auto;
+    right: var(--sar);
+    top: calc(var(--sat) + 150px);
+  }
+  .chud-progress {
+    max-width: 96px;
+    font-size: 12px;
+  }
+}
 body.in-menu #campaign-hud,
 body.in-nest #campaign-hud {
   display: none;
@@ -85,6 +97,9 @@ body.in-nest #campaign-hud {
 }
 .cmap-grid {
   display: grid;
+  /* Fit the 8 map rows on short landscape screens too. */
+  width: min(100%, calc(100dvh - 190px));
+  margin: 0 auto;
   grid-template-columns: repeat(var(--cols, 8), 1fr);
   gap: 3px;
 }

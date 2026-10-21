@@ -954,6 +954,7 @@ async function main(): Promise<void> {
           owned: campaign.state.owned,
           breeders: campaign.state.breeders,
           mapOpen: campaign.mapOpen,
+          feet: campaign.feetCount,
           kind: campaign.state.patches[campaign.state.active]?.kind ?? 'yard',
         },
       }),

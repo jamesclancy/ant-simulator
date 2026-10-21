@@ -30,6 +30,8 @@ export class CampaignUi {
   private info: CampaignSnapshot | null = null;
   private over = false;
   private warnedFeet = false;
+  /** Human feet over the current room (debug / e2e probe). */
+  feetCount = 0;
 
   constructor(private opts: CampaignUiOptions) {
     this.hud.append(h('div', { class: 'bar' }, this.progress, this.mapBtn, this.flightBtn));
@@ -86,6 +88,7 @@ export class CampaignUi {
     }
     this.map.update(this.info, s.weather);
     this.feet?.update(s.footsteps);
+    this.feetCount = s.footsteps?.length ?? 0;
     for (const ev of s.events) this.onEvent(ev, s);
   }
 

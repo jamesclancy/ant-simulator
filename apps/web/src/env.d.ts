@@ -24,6 +24,8 @@ export interface AntDebugState {
     owned: number;
     breeders: number;
     mapOpen: boolean;
+    /** Human feet over the current room. */
+    feet: number;
     kind: 'yard' | 'room';
   } | null;
   /** Audio engine probe: context state ('none' until the first gesture), active voices, music. */
