@@ -235,6 +235,7 @@ async function main(): Promise<void> {
         zoom: camera.zoom,
         frames: renderedFrames,
       }),
+      __antAtlas: () => art.atlas.canvas.toDataURL(),
       __antSpawn: (n: number) => {
         for (const c of latest?.colonies ?? []) {
           sim.sendCommands([
@@ -269,7 +270,7 @@ async function main(): Promise<void> {
         colonyPanel = new ColonyPanel(document.body, (cmds) => sim.sendCommands(cmds));
       }
       colonyPanel.reset();
-      camera.focus(config.worldSize / 2, config.worldSize / 2, 1.5);
+      camera.focus(config.worldSize / 2, config.worldSize / 2, 1);
       if (debug && !tuningMounted) {
         tuningMounted = true;
         mountWarControls(mountTuningPanel(sim, config.behavior));
@@ -318,7 +319,7 @@ async function main(): Promise<void> {
       if (!g.focused) {
         g.focused = true;
         const home = snapshot.colonies[PLAYER_COLONY]!.nest;
-        camera.focus(home.x, home.y, 1.5);
+        camera.focus(home.x, home.y, 1);
       }
       latest = snapshot;
       audio.director.onSnapshot(snapshot, audioContext());
@@ -704,7 +705,7 @@ async function main(): Promise<void> {
     });
     add('Look at spider', (s) => {
       const sp = s.spiders.find((k) => k.hp > 0);
-      if (sp) camera.focus(sp.x, sp.y, 1.5);
+      if (sp) camera.focus(sp.x, sp.y, 1);
     });
     add('Start rain', () => sim.sendCommands([{ type: 'startRain', ticks: 900 }]));
     add('Add antlion pit (+6 ants)', (s) => {
@@ -720,7 +721,7 @@ async function main(): Promise<void> {
     });
     add('Look at pit', (s) => {
       const a = s.antlions[s.antlions.length - 1];
-      if (a) camera.focus(a.x, a.y, 1.5);
+      if (a) camera.focus(a.x, a.y, 1);
     });
     add('Red raid on', () => sim.sendCommands([{ type: 'setRaid', colony: RED_COLONY, on: true }]));
     panel.appendChild(row);

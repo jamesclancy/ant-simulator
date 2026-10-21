@@ -9,19 +9,21 @@ export const SPIDER_WALK_FRAMES = 4;
 function drawSpider(px: Px, frame: number, crouch: boolean): void {
   const c = (SPIDER_SIZE - 1) / 2;
   const [ink, body, hi, glint] = T.spider;
-  // Legs first so the body covers their roots.
-  const reach = crouch ? 12 : 20;
+  // Legs first so the body covers their roots: femur then tibia, tetrapod gait.
+  const L1 = crouch ? 6 : 9.5;
+  const L2 = crouch ? 7 : 12;
+  const angles = [0.7, 1.35, 1.95, 2.55];
   for (const s of [-1, 1]) {
     for (let i = 0; i < 4; i++) {
       const group = (i + (s > 0 ? 0 : 1)) % 2;
-      const swing = crouch ? 0 : Math.sin(((frame + group * 2) / 4) * Math.PI * 2) * 3;
-      const bx = c + 6 - i * 3.5;
-      const angle = 0.55 + i * 0.5;
-      const tx = bx + Math.cos(angle * 0.0 + (1.2 - i * 0.7)) * reach * 0.55 + swing;
-      const ty = c + s * (reach * (0.8 + Math.sin(angle) * 0.15));
-      const kx = bx + (tx - bx) * 0.45;
-      const ky = c + s * (reach * 0.75 + (crouch ? 2 : 4));
-      px.line(bx, c + s * 2, kx, ky, ink);
+      const swing = crouch ? 0 : Math.sin(((frame + group * 2) / 4) * Math.PI * 2) * 0.28;
+      const a = angles[i]! + swing;
+      const bx = c + 5.5 - i * 3.2;
+      const kx = bx + Math.cos(a) * L1 * (i < 2 ? 1 : 0.9);
+      const ky = c + s * Math.sin(a) * L1;
+      const tx = kx + Math.cos(a + 0.45) * L2 * 0.8;
+      const ty = ky + s * Math.sin(a + 0.15) * L2;
+      px.line(bx, c + s * 2.5, kx, ky, ink);
       px.line(kx, ky, tx, ty, ink);
       px.set(tx, ty, body);
     }

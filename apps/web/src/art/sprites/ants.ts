@@ -79,19 +79,18 @@ function drawAnt(px: Px, pal: Palette, pose: Pose): void {
   const shade = col.shade;
   const tone = (v: number): number => (v < -0.4 ? light : v > 0.45 ? shade : body);
 
-  // Proportions per caste.
-  const headR = soldier ? 3.2 : breeder ? 2.1 : 2.1;
-  const headX = cx + (soldier ? 6 : breeder ? 5 : 4.5);
-  const thR = soldier ? 2.8 : breeder ? 3 : 2.2;
-  const abX = cx - (soldier ? 6.5 : breeder ? 7 : 5);
-  const abRx = soldier ? 4.8 : breeder ? 5.2 : 3.8;
-  const abRy = soldier ? 3.4 : breeder ? 3.2 : 2.7;
+  // Proportions per caste: three separate blobs joined by a 1-px waist.
+  const headR = soldier ? 3 : breeder ? 2 : 1.9;
+  const headX = cx + (soldier ? 7 : breeder ? 5.2 : 4.4);
+  const thR = soldier ? 2.4 : breeder ? 2.6 : 1.8;
+  const abX = cx - (soldier ? 7.4 : breeder ? 7.8 : 5.8);
+  const abRx = soldier ? 4.4 : breeder ? 4.8 : 3.4;
+  const abRy = soldier ? 3.3 : breeder ? 3.1 : 2.6;
 
   const abdomen = (x: number, y: number, u: number, v: number): number | null => {
     if (pointed && !(u > -0.3 || Math.abs(v) <= (u + 1) * 1.25)) return null;
     // Identity marks: colony 1 wears two pale bands, colony 0 a pale spot, the player a stripe.
-    if (pose.who === 1 && (Math.round(x - abX) === -1 || Math.round(x - abX) === 2))
-      return col.mark;
+    if (pose.who === 1 && (Math.round(x - abX) === -1 || Math.round(x - abX) === 2)) return col.mark;
     if (pose.who === 0 && Math.abs(u) < 0.34 && Math.abs(v) < 0.34) return col.mark;
     if (pose.who === 'p' && Math.abs(v) < 0.2) return col.mark;
     return tone(v);
@@ -106,13 +105,14 @@ function drawAnt(px: Px, pal: Palette, pose: Pose): void {
   }
 
   px.ellipse(abX, cy, abRx, abRy, abdomen);
-  px.ellipse(cx, cy, thR, soldier ? 2.3 : breeder ? 2.4 : 1.8, (_x, _y, _u, v) => tone(v));
-  // Waist link so the segments read as one body.
-  px.rect(Math.round((abX + abRx + cx - thR) / 2) - 1, cy, 2, 1, body);
+  px.ellipse(cx, cy, thR, soldier ? 2.1 : breeder ? 2.2 : 1.6, (_x, _y, _u, v) => tone(v));
   px.ellipse(headX, cy, headR, headR * (pointed ? 0.9 : 1), (_x, _y, u, v) => {
     if (soldier && Math.abs(v) < 0.3 && u > 0.1) return shade;
     return tone(v);
   });
+  // Waists between the blobs.
+  px.rect(Math.round(abX + abRx - 0.5), cy, Math.max(1, Math.round(cx - thR - abX - abRx + 1.2)), 1, shade);
+  px.rect(Math.round(cx + thR - 0.5), cy, Math.max(1, Math.round(headX - headR - cx - thR + 1.2)), 1, shade);
   px.outline(ring, pal.highContrast);
 
   // Eyes.
@@ -120,19 +120,22 @@ function drawAnt(px: Px, pal: Palette, pose: Pose): void {
   px.set(headX + 0.6, cy - eyeY, col.accent);
   px.set(headX + 0.6, cy + eyeY, col.accent);
 
-  // Legs: alternating tripods, swinging one pixel fore and aft.
+  // Legs: alternating tripods, each a two-segment line that swings fore and aft.
   const legColor = nest ? mix(ring, body, 0.35) : ring;
-  const reach = soldier ? 6.4 : breeder ? 7 : 4.6;
+  const reach = soldier ? 6.6 : breeder ? 7.4 : 4.8;
   const sway = state === 'fight' ? 0 : [0, 1, 0, -1][frame % 4]!;
   for (const s of [-1, 1]) {
     for (let i = 0; i < 3; i++) {
       const groupA = (i + (s > 0 ? 0 : 1)) % 2 === 0;
-      const d = sway * (groupA ? 1 : -1);
-      const bx = cx + (1 - i) * (soldier ? 2.2 : 1.7);
-      const tx = bx + (1 - i) * 2.2 + d;
+      const d = sway * (groupA ? 1 : -1) * 1.2;
+      const bx = cx + (1 - i) * (soldier ? 1.8 : 1.3);
+      const fore = (1 - i) * 1.8 + d;
+      const kx = bx + fore * 0.6;
+      const ky = cy + s * (reach * 0.55);
+      const tx = bx + fore * 1.5;
       const ty = cy + s * reach;
-      px.line(bx, cy + s * (thR * 0.55), tx, cy + s * (reach - 1.2), legColor);
-      px.under(tx, ty, legColor);
+      px.line(bx, cy + s * (thR * 0.5), kx, ky, legColor);
+      px.line(kx, ky, tx, ty, legColor);
     }
   }
 
