@@ -3,6 +3,7 @@ import { expect, openMenu, test } from './fixtures';
 // Service workers and installability are checked on Chromium only.
 test.describe('PWA', () => {
   test.skip(({ browserName }) => browserName !== 'chromium', 'chromium only');
+  test.use({ serviceWorkers: 'allow' });
 
   test('manifest is valid and linked', async ({ page, errors }) => {
     void errors;

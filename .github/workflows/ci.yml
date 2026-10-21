@@ -61,6 +61,8 @@ jobs:
         if: failure()
         with:
           name: playwright-report
+          # The report and results live in dot-directories, which v4+ skips by default.
+          include-hidden-files: true
           path: |
             e2e/.report
             e2e/.results
