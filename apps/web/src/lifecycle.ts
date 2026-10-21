@@ -8,8 +8,13 @@ import { App } from '@capacitor/app';
 export function pauseWhenBackgrounded(
   setPaused: (paused: boolean) => void,
   isUserPaused: () => boolean,
+  /** Fired each time the app goes to the background (e.g. to autosave). */
+  onBackground: () => void = () => {},
 ): void {
-  const apply = (hidden: boolean): void => setPaused(hidden || isUserPaused());
+  const apply = (hidden: boolean): void => {
+    setPaused(hidden || isUserPaused());
+    if (hidden) onBackground();
+  };
   document.addEventListener('visibilitychange', () => apply(document.hidden));
   void App.addListener('appStateChange', ({ isActive }) => apply(!isActive)).catch(() => {});
 }

@@ -105,4 +105,22 @@ export function compactAnts(ants: AntStore, remap: Int32Array): number {
   return n - w;
 }
 
+/** Plain-data copy of the live ants (`count` entries per array). */
+export interface AntsState {
+  count: number;
+  arrays: Record<(typeof FIELDS)[number], ArrayBufferView>;
+}
+
+export function getAntsState(ants: AntStore): AntsState {
+  const arrays = {} as AntsState['arrays'];
+  for (const f of FIELDS) arrays[f] = ants[f].slice(0, ants.count);
+  return { count: ants.count, arrays };
+}
+
+export function setAntsState(ants: AntStore, s: AntsState): void {
+  if (s.count > ants.capacity) throw new Error('save holds more ants than the store can');
+  for (const f of FIELDS) (ants[f] as Float32Array).set(s.arrays[f] as Float32Array);
+  ants.count = s.count;
+}
+
 export { MAX_ANTS };

@@ -11,6 +11,16 @@ const DIRS: ReadonlyArray<readonly [number, number]> = [
 /** Chamber kinds the planner cycles through when it adds a chamber. */
 const CHAMBER_CYCLE = [ChamberKind.Nursery, ChamberKind.Nursery, ChamberKind.Food] as const;
 
+export interface DigPlannerState {
+  tile: number[];
+  type: number[];
+  kind: number[];
+  cursor: number;
+  segments: number;
+  chambers: number;
+  branches: Int32Array;
+}
+
 /**
  * Decides what to dig next. Keeps a queue of planned tiles (`tile`, `type`, `kind`); the
  * front is the current dig target. Plans alternate between tunnel segments (random
@@ -33,6 +43,28 @@ export class DigPlanner {
     private rng: Rng,
   ) {
     for (let i = 0; i < grid.size; i++) if (grid.isOpenIndex(i)) this.branches.push(i);
+  }
+
+  getState(): DigPlannerState {
+    return {
+      tile: [...this.tile],
+      type: [...this.type],
+      kind: [...this.kind],
+      cursor: this.cursor,
+      segments: this.segments,
+      chambers: this.chambers,
+      branches: Int32Array.from(this.branches),
+    };
+  }
+
+  setState(s: DigPlannerState): void {
+    this.tile = [...s.tile];
+    this.type = [...s.type] as TileType[];
+    this.kind = [...s.kind] as ChamberKind[];
+    this.cursor = s.cursor;
+    this.segments = s.segments;
+    this.chambers = s.chambers;
+    this.branches = Array.from(s.branches);
   }
 
   /** Tile currently being dug, or -1 when nothing is plannable. Refills the queue as needed. */

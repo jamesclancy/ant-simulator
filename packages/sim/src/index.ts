@@ -1,5 +1,7 @@
-export { createSim, resolveConfig } from './sim';
-export type { Sim } from './sim';
+export { createSim, resolveConfig, restoreSim } from './sim';
+export type { Sim, SimModule, SimState } from './sim';
+export { SaveError, SAVE_VERSION, readSaveInfo } from './save/format';
+export type { SaveInfo } from './save/format';
 export { createRng } from './rng';
 export type { Rng } from './rng';
 export type { AntStore } from './ants';

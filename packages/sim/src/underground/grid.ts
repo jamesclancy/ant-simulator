@@ -1,6 +1,12 @@
 import { ChamberKind, NEST_GRID_H, NEST_GRID_W, TileType } from '@ant/shared';
 import type { Rng } from '../rng';
 
+export interface NestGridState {
+  tiles: Uint8Array;
+  kinds: Uint8Array;
+  version: number;
+}
+
 /**
  * Side-view tile grid of one nest. Row 0 is the surface line (`Air`, except the single
  * `Tunnel` entrance tile); rows grow downward. Tiles are `TileType`s; `Chamber` tiles also
@@ -80,6 +86,18 @@ export class NestGrid {
     }
     this.openCount = open;
     this.nurseryCount = this.nurseryTiles.length;
+  }
+
+  getState(): NestGridState {
+    return { tiles: this.tiles.slice(), kinds: this.kinds.slice(), version: this.version };
+  }
+
+  /** Derived lists (`nurseryTiles`, ...) are recomputed, not stored. */
+  setState(s: NestGridState): void {
+    this.tiles.set(s.tiles);
+    this.kinds.set(s.kinds);
+    this.refresh();
+    this.version = s.version;
   }
 
   /** Packed cells for snapshots: `type | kind << 3`. */

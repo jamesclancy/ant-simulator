@@ -7,6 +7,8 @@ import { ScentOverlay } from './scentOverlay';
 import { WorldLayer } from './worldLayer';
 import { SimClient } from './simClient';
 import { pauseWhenBackgrounded } from './lifecycle';
+import { bindSaves } from './save';
+import { mountSaveMenu } from './save/saveMenu';
 import { mountTuningPanel } from './tuningPanel';
 import { PlayerInput } from './player/input';
 import { PlayerMarker } from './player/marker';
@@ -18,6 +20,8 @@ const SURFACE_BACKGROUND = 0x1b2a1b;
 /** Underground ant tints (index = colony): light so they read against dark tunnels. */
 const NEST_TINTS = [0xd9c7a5, 0xff6a4a];
 const NEST_FIGHT_TINTS = [0xffffff, 0xffd0a0];
+/** Game ticks (20 per second) between autosaves: 60 s of game time. */
+const AUTOSAVE_TICKS = 60 * 20;
 const COLONY_NAMES = ['black', 'red'];
 
 const params = new URLSearchParams(location.search);
@@ -127,6 +131,9 @@ async function main(): Promise<void> {
   const sim = new SimClient({
     onReady(config) {
       game = buildGame(config);
+      // A new or loaded game: the autosave clock restarts at its first snapshot.
+      latest = null;
+      lastAutosaveTick = -1;
       hideGameOver();
       viewNest = PLAYER_COLONY;
       setLayer(0);
@@ -278,9 +285,36 @@ async function main(): Promise<void> {
     setPausedUi(!paused);
     sim.setPaused(paused);
   });
+  // Saves: autosave slot every AUTOSAVE_TICKS of game time and when the app is backgrounded.
+  const saves = bindSaves(sim);
+  const saveMenu = mountSaveMenu({
+    controller: saves,
+    button: document.getElementById('saves')!,
+    notify: (msg) => playerInput.toast(msg),
+    onLoaded: () => {
+      setPausedUi(false);
+    },
+  });
+  let lastAutosaveTick = -1;
+  let autosaving = false;
+  const autosave = (): void => {
+    const s = latest;
+    // A finished game isn't worth keeping over a playable one.
+    if (!s || s.winner !== -1 || autosaving) return;
+    autosaving = true;
+    lastAutosaveTick = s.tick;
+    saves
+      .save('auto')
+      .then(() => saveMenu.refresh())
+      .catch(() => {})
+      .finally(() => {
+        autosaving = false;
+      });
+  };
   pauseWhenBackgrounded(
     (p) => sim.setPaused(p),
     () => paused,
+    autosave,
   );
   const speedButtons = SPEED_STEPS.map((s) => {
     const b = document.createElement('button');
@@ -415,6 +449,8 @@ async function main(): Promise<void> {
     popRed.hidden = !red;
     statsEl.textContent = `food ${Math.floor(black?.food ?? 0)} · tick ${s.tick}`;
     colonyPanel?.update(s);
+    if (lastAutosaveTick < 0) lastAutosaveTick = s.tick;
+    else if (s.tick - lastAutosaveTick >= AUTOSAVE_TICKS) autosave();
     nestSwitch.hidden = layer === 0 || !enemyNestKnown();
   }, 250);
 }

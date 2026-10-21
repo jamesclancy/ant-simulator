@@ -358,6 +358,19 @@ export interface Snapshot {
   winner: number;
 }
 
+/** Header summary of a save (also what the slot list shows). */
+export interface SaveInfo {
+  /** Save format version. */
+  version: number;
+  tick: number;
+  seed: number;
+  /** -1 while running, else the winner (see `Snapshot.winner`). */
+  winner: number;
+  /** Live ants per colony (index = colony id). */
+  populations: number[];
+  queensAlive: boolean[];
+}
+
 /** Main thread -> worker. */
 export type WorkerInMessage =
   | { type: 'init'; config: SimConfigInput }
@@ -365,10 +378,28 @@ export type WorkerInMessage =
   | { type: 'setPaused'; paused: boolean }
   | { type: 'setSpeed'; speed: number }
   /** Scent vision on/off: pheromone data is only snapshotted while enabled. */
-  | { type: 'setScentVision'; enabled: boolean };
+  | { type: 'setScentVision'; enabled: boolean }
+  /** Serialize the running sim; answered with `saved` (or `error`). */
+  | { type: 'save'; requestId: number }
+  /** Replace the sim with a saved one; answered with `ready` + a snapshot (or `error`). */
+  | { type: 'load'; requestId: number; bytes: Uint8Array };
 
 /** Worker -> main thread. */
 export type WorkerOutMessage =
-  { type: 'ready'; config: SimConfig } | { type: 'snapshot'; snapshot: Snapshot; speed: number };
+  | {
+      type: 'ready';
+      config: SimConfig;
+      /** Set when this is the answer to a `load`. */ requestId?: number;
+    }
+  | { type: 'snapshot'; snapshot: Snapshot; speed: number }
+  | { type: 'saved'; requestId: number; bytes: Uint8Array; info: SaveInfo }
+  | {
+      type: 'error';
+      requestId: number;
+      operation: 'save' | 'load';
+      /** `SaveError.code` for load failures, else 'failed'. */
+      code: string;
+      message: string;
+    };
 
 export { ANT_STRIDE };

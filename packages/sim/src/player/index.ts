@@ -24,6 +24,21 @@ const GOLDEN_ANGLE = 2.399963;
 /** The player ant is tougher than a soldier, so it isn't lost in the first skirmish. */
 const PLAYER_HP_FACTOR = 2;
 
+export interface PlayerState {
+  index: number;
+  targetX: number;
+  targetY: number;
+  hasTarget: boolean;
+  dirX: number;
+  dirY: number;
+  trailOn: boolean;
+  recruited: Int32Array;
+  events: SimEvent[];
+  lostFrom: number;
+  lastX: number;
+  lastY: number;
+}
+
 type PlayerCommand = Extract<Command, { type: `player${string}` }>;
 
 export function isPlayerCommand(cmd: Command): cmd is PlayerCommand {
@@ -64,6 +79,38 @@ export class PlayerController {
     private worldSize: number,
     private combat: CombatConfig,
   ) {}
+
+  getState(): PlayerState {
+    return {
+      index: this.index,
+      targetX: this.targetX,
+      targetY: this.targetY,
+      hasTarget: this.hasTarget,
+      dirX: this.dirX,
+      dirY: this.dirY,
+      trailOn: this.trailOn,
+      recruited: Int32Array.from(this.recruited),
+      events: this.events.map((e) => ({ ...e })),
+      lostFrom: this.lostFrom,
+      lastX: this.lastX,
+      lastY: this.lastY,
+    };
+  }
+
+  setState(s: PlayerState): void {
+    this.index = s.index;
+    this.targetX = s.targetX;
+    this.targetY = s.targetY;
+    this.hasTarget = s.hasTarget;
+    this.dirX = s.dirX;
+    this.dirY = s.dirY;
+    this.trailOn = s.trailOn;
+    this.recruited = Array.from(s.recruited);
+    this.events = s.events.map((e) => ({ ...e }));
+    this.lostFrom = s.lostFrom;
+    this.lastX = s.lastX;
+    this.lastY = s.lastY;
+  }
 
   get recruitCount(): number {
     return this.recruited.length;

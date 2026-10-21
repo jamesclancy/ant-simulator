@@ -15,11 +15,52 @@ import { createRng } from '../rng';
 import type { Rng } from '../rng';
 import type { Nest } from '../world/nest';
 import { DigPlanner } from '../underground/digplan';
+import type { DigPlannerState } from '../underground/digplan';
 import { FlowField } from '../underground/flow';
+import type { FlowFieldState } from '../underground/flow';
 import { NestGrid } from '../underground/grid';
+import type { NestGridState } from '../underground/grid';
 import { updateUndergroundAnts } from '../underground/ants';
 import { Brood, BroodStage } from './brood';
+import type { BroodState } from './brood';
 import { mostNeededRole, normaliseRatio, rebalanceRoles, roleTargets } from './roles';
+
+export interface ColonyState {
+  nestStore: number;
+  rng: number;
+  grid: NestGridState;
+  planner: DigPlannerState;
+  flows: FlowFieldState[];
+  fieldsVersion: number;
+  brood: BroodState;
+  ratio: BehaviorRatio;
+  casteRatio: CasteRatio;
+  raid: boolean;
+  queenAlive: boolean;
+  queenHp: number;
+  lost: boolean;
+  dirt: number;
+  digTarget: number;
+  digProgress: number;
+  digWorkers: number;
+  lastDigger: number;
+  nursesTending: number;
+  population: number;
+  castes: number[];
+  underground: number;
+  fighting: number;
+  intruders: number;
+  threat: number;
+  scouted: boolean;
+  losses: number;
+  layProgress: number;
+  starveProgress: number;
+  hunger: number;
+  nursing: number;
+  roleCount: number[];
+  roleTarget: number[];
+  tick: number;
+}
 
 /** Roles are re-evaluated this often (ticks). */
 const REBALANCE_INTERVAL = 10;
@@ -68,6 +109,8 @@ export class Colony {
   readonly toQueen: FlowField;
   private fieldsVersion = -1;
   private planner: DigPlanner;
+  /** Nest layout / dig-plan stream; its state is saved. */
+  private readonly rng: Rng;
 
   ratio: BehaviorRatio;
   casteRatio: CasteRatio;
@@ -124,6 +167,7 @@ export class Colony {
     this.nest = opts.nest;
     this.onEvent = opts.onEvent ?? (() => {});
     const rng = createRng(opts.seed ^ Math.imul(opts.id + 1, 0x85ebca6b));
+    this.rng = rng;
     this.grid = opts.grid ?? new NestGrid();
     this.grid.generate(rng);
     this.planner = new DigPlanner(this.grid, rng);
@@ -403,6 +447,93 @@ export class Colony {
     this.queenHp = 0;
     this.lost = true;
     this.onEvent({ type: 'queenKilled', colony: this.id, cause });
+  }
+
+  /** Everything needed to continue this colony exactly, as plain data / typed arrays. */
+  getState(): ColonyState {
+    return {
+      nestStore: this.nest.store,
+      rng: this.rng.getState(),
+      grid: this.grid.getState(),
+      planner: this.planner.getState(),
+      flows: this.flowFields().map((f) => f.getState()),
+      fieldsVersion: this.fieldsVersion,
+      brood: this.brood.getState(),
+      ratio: { ...this.ratio },
+      casteRatio: { ...this.casteRatio },
+      raid: this.raid,
+      queenAlive: this.queenAlive,
+      queenHp: this.queenHp,
+      lost: this.lost,
+      dirt: this.dirt,
+      digTarget: this.digTarget,
+      digProgress: this.digProgress,
+      digWorkers: this.digWorkers,
+      lastDigger: this.lastDigger,
+      nursesTending: this.nursesTending,
+      population: this.population,
+      castes: [...this.castes],
+      underground: this.underground,
+      fighting: this.fighting,
+      intruders: this.intruders,
+      threat: this.threat,
+      scouted: this.scouted,
+      losses: this.losses,
+      layProgress: this.layProgress,
+      starveProgress: this.starveProgress,
+      hunger: this.hunger,
+      nursing: this.nursing,
+      roleCount: [...this.roleCount],
+      roleTarget: [...this.roleTarget],
+      tick: this.tick,
+    };
+  }
+
+  setState(s: ColonyState): void {
+    this.nest.store = s.nestStore;
+    this.rng.setState(s.rng);
+    this.grid.setState(s.grid);
+    this.planner.setState(s.planner);
+    this.flowFields().forEach((f, i) => f.setState(s.flows[i]!));
+    this.fieldsVersion = s.fieldsVersion;
+    this.brood.setState(s.brood);
+    this.ratio = { ...s.ratio };
+    this.casteRatio = { ...s.casteRatio };
+    this.raid = s.raid;
+    this.queenAlive = s.queenAlive;
+    this.queenHp = s.queenHp;
+    this.lost = s.lost;
+    this.dirt = s.dirt;
+    this.digTarget = s.digTarget;
+    this.digProgress = s.digProgress;
+    this.digWorkers = s.digWorkers;
+    this.lastDigger = s.lastDigger;
+    this.nursesTending = s.nursesTending;
+    this.population = s.population;
+    this.castes[0] = s.castes[0]!;
+    this.castes[1] = s.castes[1]!;
+    this.castes[2] = s.castes[2]!;
+    this.underground = s.underground;
+    this.fighting = s.fighting;
+    this.intruders = s.intruders;
+    this.threat = s.threat;
+    this.scouted = s.scouted;
+    this.losses = s.losses;
+    this.layProgress = s.layProgress;
+    this.starveProgress = s.starveProgress;
+    this.hunger = s.hunger;
+    this.nursing = s.nursing;
+    for (let i = 0; i < 3; i++) {
+      this.roleCount[i] = s.roleCount[i]!;
+      this.roleTarget[i] = s.roleTarget[i]!;
+    }
+    this.tick = s.tick;
+    // Not game state: make the next snapshot resend the (restored) nest grid.
+    this.lastSentVersion = -1;
+  }
+
+  private flowFields(): FlowField[] {
+    return [this.toEntrance, this.toFood, this.toNursery, this.toDig, this.toQueen];
   }
 
   /** Per-colony slice of a snapshot, from the latest census. */
