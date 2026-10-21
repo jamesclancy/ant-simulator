@@ -67,5 +67,8 @@ switches to the underground view; once your ants have found the red nest you can
 The Colony panel sets jobs, the caste mix of new ants, and whether soldiers raid the red nest.
 Kill the red queen to win; lose yours and it's over.
 
-URL options: `?difficulty=easy|normal|hard`, `?seed=N`, `?debug` (tuning panel, spawn-soldier
+The game opens on a main menu (New Game, Settings, How to Play); the first game runs a skippable
+tutorial, and Esc / the Pause button opens the pause menu.
+
+URL options: `?play` (skip the menu), `?difficulty=easy|normal|hard`, `?seed=N` (with `?play`), `?debug` (tuning panel, spawn-soldier
 buttons, enemy nest always viewable).

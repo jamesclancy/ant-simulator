@@ -72,6 +72,9 @@ importers:
       '@capacitor/filesystem':
         specifier: ^8.1.5
         version: 8.1.5(@capacitor/core@8.5.3)
+      '@capacitor/preferences':
+        specifier: ^8.0.1
+        version: 8.0.1(@capacitor/core@8.5.3)
       pixi.js:
         specifier: ^8.22.0
         version: 8.22.0
@@ -142,6 +145,11 @@ packages:
     resolution: {integrity: sha512-HnnV92Jl8+3x0JUloXUMjFcUsQI8wHFVsKwkLn72DfRZXYGZW11tQbmNOWOnRTljaU18FdI1b9ipT09SzzPDNw==}
     peerDependencies:
       '@capacitor/core': ^8.5.0
+
+  '@capacitor/preferences@8.0.1':
+    resolution: {integrity: sha512-T6no3ebi79XJCk91U3Jp/liJUwgBdvHR+s6vhvPkPxSuch7z3zx5Rv1bdWM6sWruNx+pViuEGqZvbfCdyBvcHQ==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
 
   '@capacitor/synapse@1.0.4':
     resolution: {integrity: sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw==}
@@ -1508,6 +1516,10 @@ snapshots:
       '@capacitor/synapse': 1.0.4
 
   '@capacitor/ios@8.5.3(@capacitor/core@8.5.3)':
+    dependencies:
+      '@capacitor/core': 8.5.3
+
+  '@capacitor/preferences@8.0.1(@capacitor/core@8.5.3)':
     dependencies:
       '@capacitor/core': 8.5.3
 
