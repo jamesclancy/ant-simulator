@@ -222,6 +222,7 @@ async function main(): Promise<void> {
     };
   };
 
+  let renderedFrames = 0;
   // ?debug: perf probe for device-throttling runs (see docs/PERF.md).
   if (debug) {
     Object.assign(window, {
@@ -231,6 +232,7 @@ async function main(): Promise<void> {
         tier: profile.tier,
         ants: latest?.antCount ?? 0,
         zoom: camera.zoom,
+        frames: renderedFrames,
       }),
       __antSpawn: (n: number) => {
         for (const c of latest?.colonies ?? []) {
@@ -403,6 +405,7 @@ async function main(): Promise<void> {
   });
 
   app.ticker.add(() => {
+    renderedFrames++;
     fps.tick(app.ticker.FPS, governor.simMs);
     governor.frame(performance.now(), document.hidden || mode === 'menu');
     weather.setReduceMotion(settings.value.reduceMotion);
