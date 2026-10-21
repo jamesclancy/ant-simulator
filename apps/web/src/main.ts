@@ -7,7 +7,7 @@ import {
   NEST_TILE,
   PLAYER_COLONY,
   RED_COLONY,
-  SPEED_STEPS,
+  SANDBOX_SPEED_STEPS,
   flagFighting,
 } from '@ant/shared';
 import { AntLayer } from './antLayer';
@@ -33,6 +33,10 @@ import { BATTERY_SAVER_FPS, PerfGovernor } from './platform/perfGovernor';
 import { initNativeShell } from './platform/nativeShell';
 import { PROFILES, type DeviceTier, type PerfProfile } from './platform/deviceTier';
 import { Menu, type NewGameOptions } from './ui/menu';
+import type { SandboxOptions } from './sandbox/config';
+import { SandboxUi } from './sandbox/sandboxUi';
+import { sandboxConfig } from './sandbox/config';
+import { ObstacleLayer } from './sandbox/obstacleLayer';
 import { SettingsStore } from './ui/settings';
 import { bindDocumentSettings, createFpsMeter } from './ui/applySettings';
 import { TutorialPanel } from './ui/tutorialPanel';
@@ -59,6 +63,7 @@ const randomSeed = (): number => (Math.random() * 0x7fffffff) | 0;
 interface Scene {
   scent: ScentOverlay;
   worldLayer: WorldLayer;
+  rocks: ObstacleLayer;
   mounds: DirtMound[];
   ants: AntLayer;
   spiders: SpiderLayer;
@@ -115,8 +120,12 @@ async function main(): Promise<void> {
   /** `menu`: ambient backdrop behind the main menu; `playing`: a real game (maybe paused). */
   let mode: 'menu' | 'playing' = 'menu';
   let backdropFrozen = false;
+  let rockCount = 0;
   let pendingTutorial = false;
-  let lastConfig = { seed: 0, difficulty };
+  let lastConfig: { seed: number; difficulty: Difficulty; sandbox?: SandboxOptions } = {
+    seed: 0,
+    difficulty,
+  };
   const touch = matchMedia('(pointer: coarse)').matches;
   document.body.classList.add('in-menu');
   let game: Scene | null = null;
@@ -166,6 +175,7 @@ async function main(): Promise<void> {
     scent.setVisible(scentOn);
     scent.minIntervalMs = profile.scentIntervalMs;
     const worldLayer = new WorldLayer(world);
+    const rocks = new ObstacleLayer(world);
     const mounds: DirtMound[] = [];
     for (let c = 0; c < config.colonies; c++) mounds.push(new DirtMound(world, c));
     const ants = new AntLayer(app.renderer, world, { layer: 0 });
@@ -190,6 +200,7 @@ async function main(): Promise<void> {
     return {
       scent,
       worldLayer,
+      rocks,
       mounds,
       ants,
       spiders,
@@ -224,8 +235,12 @@ async function main(): Promise<void> {
     });
   }
   const sim = new SimClient({
-    onReady(config) {
+    onReady(config, tuning) {
       game = buildScene(config);
+      rockCount = 0;
+      sandbox.attachScene();
+      sandbox.setGame(config, tuning);
+      syncSandboxHud(config);
       // A new or loaded game: the autosave clock restarts at its first snapshot.
       latest = null;
       lastAutosaveTick = -1;
@@ -253,6 +268,11 @@ async function main(): Promise<void> {
       if (simMs !== undefined) governor.reportSim(simMs);
       if (mode === 'playing') buzzIfAttacked(snapshot);
       g.worldLayer.update(snapshot);
+      if (snapshot.obstacles) {
+        g.rocks.update(snapshot.obstacles);
+        rockCount = snapshot.obstacles.length;
+      }
+      sandbox.onSnapshot(snapshot);
       for (const m of g.mounds) m.update(snapshot);
       g.ants.push(snapshot, speed);
       g.spiders.update(snapshot);
@@ -328,12 +348,21 @@ async function main(): Promise<void> {
     return world.toLocal({ x: cx - r.left, y: cy - r.top });
   };
   let placing = false;
+  const sandbox = new SandboxUi({
+    host,
+    world,
+    camera,
+    send: (commands) => sim.sendCommands(commands),
+    toWorld,
+    layer: () => layer,
+    toast: (text) => playerInput.toast(text),
+  });
   const playerInput = new PlayerInput({
     host,
     send: (commands) => sim.sendCommands(commands),
     toWorld,
-    // Taps only steer the player on the surface view, and not while placing food.
-    toolActive: () => placing || layer !== 0,
+    // Taps only steer the player on the surface view, and not while placing food or painting.
+    toolActive: () => placing || sandbox.toolMode || layer !== 0,
     onTarget: (x, y) => game?.marker.showTarget(x, y),
     keysEnabled: () => mode === 'playing' && !menu.isOpen,
     // Debug only: long-press the ground to drop a food pile (the sandbox tool arrives later).
@@ -408,7 +437,7 @@ async function main(): Promise<void> {
       placing = false;
       foodTool.setAttribute('aria-pressed', 'false');
     }
-    foodTool.hidden = next === 1;
+    foodTool.hidden = next === 1 || sandbox.isActive;
     scentBtn.hidden = next === 1;
     nestSwitch.hidden = next === 0 || !enemyNestKnown();
   };
@@ -474,7 +503,7 @@ async function main(): Promise<void> {
     () => paused,
     autosave,
   );
-  const speedButtons = SPEED_STEPS.map((s) => {
+  const speedButtons = SANDBOX_SPEED_STEPS.map((s) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = `${s}x`;
@@ -490,6 +519,20 @@ async function main(): Promise<void> {
     for (const { s, b } of speedButtons) b.setAttribute('aria-pressed', String(s === speed));
   };
   refresh();
+  /** Sandbox-only HUD changes: the 8x speed step, and the toolbar replaces Place food. */
+  function syncSandboxHud(config: SimConfig): void {
+    for (const { s, b } of speedButtons) b.hidden = s > 4 && !config.sandbox;
+    if (!config.sandbox && speed > 4) {
+      speed = 4;
+      sim.setSpeed(speed);
+      refresh();
+    }
+    foodTool.hidden = layer === 1 || config.sandbox;
+    if (config.sandbox) {
+      placing = false;
+      foodTool.setAttribute('aria-pressed', 'false');
+    }
+  }
   // Place-food tool: when on, a tap/click (not a drag) places a pile at that world point.
   const foodTool = document.getElementById('place-food')!;
   foodTool.addEventListener('click', () => {
@@ -503,7 +546,8 @@ async function main(): Promise<void> {
   host.addEventListener('pointerup', (e) => {
     const d = down;
     down = null;
-    if (!d || layer !== 0 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6) return;
+    if (!d || layer !== 0 || sandbox.toolMode) return;
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6) return;
     const p = toWorld(e.clientX, e.clientY);
     if (!placing) {
       // Tapping an entrance opens that nest (the red one only once it has been found).
@@ -554,7 +598,12 @@ async function main(): Promise<void> {
     modal.hidden = true;
   }
   again.addEventListener('click', () =>
-    startGame({ difficulty: lastConfig.difficulty, seed: undefined, tutorial: false }),
+    startGame({
+      difficulty: lastConfig.difficulty,
+      seed: undefined,
+      tutorial: false,
+      ...(lastConfig.sandbox ? { sandbox: lastConfig.sandbox } : {}),
+    }),
   );
 
   /** ?debug: buttons to provoke fights and raids without waiting. */
@@ -639,7 +688,12 @@ async function main(): Promise<void> {
     onNewGame: (options) => startGame(options),
     onResume: () => resume(),
     onRestart: () =>
-      startGame({ difficulty: lastConfig.difficulty, seed: lastConfig.seed, tutorial: false }),
+      startGame({
+        difficulty: lastConfig.difficulty,
+        seed: lastConfig.seed,
+        tutorial: false,
+        ...(lastConfig.sandbox ? { sandbox: lastConfig.sandbox } : {}),
+      }),
     onQuit: () => startBackdrop(),
     onReplayTutorial: () => {
       if (mode === 'menu') {
@@ -663,7 +717,11 @@ async function main(): Promise<void> {
   /** Start (or restart) a real game on the existing Pixi app and worker; no reload. */
   function startGame(options: NewGameOptions): void {
     mode = 'playing';
-    lastConfig = { seed: options.seed ?? randomSeed(), difficulty: options.difficulty };
+    lastConfig = {
+      seed: options.seed ?? randomSeed(),
+      difficulty: options.difficulty,
+      ...(options.sandbox ? { sandbox: options.sandbox } : {}),
+    };
     menu.close();
     syncMenuClasses();
     tutorial.stop();
@@ -671,7 +729,12 @@ async function main(): Promise<void> {
     latest = null;
     hideGameOver();
     setPausedUi(false);
-    sim.init({ ...lastConfig, maxAnts: governor.maxAnts });
+    sim.init({
+      seed: lastConfig.seed,
+      difficulty: lastConfig.difficulty,
+      maxAnts: governor.maxAnts,
+      ...(lastConfig.sandbox ? sandboxConfig(lastConfig.sandbox) : {}),
+    });
     sim.setPaused(false);
     sim.setSpeed(speed);
     playerInput.setFollow(settings.value.followCamera);
@@ -779,6 +842,10 @@ async function main(): Promise<void> {
         player: latest?.player ? { x: latest.player.x, y: latest.player.y } : null,
         seed: lastConfig.seed,
         tutorialActive: tutorial.active,
+        sandbox: sandbox.isActive,
+        tool: sandbox.toolMode,
+        rocks: rockCount,
+        speed,
       }),
       send: (commands) => sim.sendCommands(commands),
     };

@@ -45,6 +45,12 @@ export interface SimConfig {
   antlion: AntlionConfig;
   /** Rain / flooding tuning (see `DEFAULT_RAIN`); `difficulty` scales frequency and length. */
   rain: RainConfig;
+  /** Sandbox game: enables the sandbox-only commands (rocks, live colony / combat / scent tuning). */
+  sandbox: boolean;
+  /** The red colony's AI director runs. Off = the other colonies keep their starting ratios. */
+  ai: boolean;
+  /** The game ends (and the sim stops) when only one queen is left. Sandboxes turn this off. */
+  winLose: boolean;
 }
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
@@ -369,8 +375,30 @@ export type Command =
   | { type: 'spawnSpider'; x: number; y: number }
   /** Start a shower now (debug / sandbox); `ticks` defaults to a random duration. */
   | { type: 'startRain'; ticks?: number }
+  /** End the current shower (it fades out). */
+  | { type: 'stopRain' }
   /** Dig an antlion pit at a surface point (debug / sandbox). */
-  | { type: 'addAntlion'; x: number; y: number };
+  | { type: 'addAntlion'; x: number; y: number }
+  /** Sandbox: place a rock (impassable disc for surface ants; radius is clamped). */
+  | { type: 'placeObstacle'; x: number; y: number; radius: number }
+  /** Sandbox: erase everything on the surface inside the brush disc (ants, food, rocks, pits, spiders). */
+  | { type: 'erase'; x: number; y: number; radius: number }
+  /** Sandbox: remove all rocks. */
+  | { type: 'clearObstacles' }
+  /** Sandbox: live-tune combat (merged over the current values). */
+  | { type: 'setCombat'; params: Partial<CombatConfig> }
+  /** Sandbox: live-tune the economy of one colony, or of all when `colony` is omitted. */
+  | {
+      type: 'setColonyParams';
+      colony?: number;
+      params: Partial<Omit<ColonyConfig, 'behaviorRatio' | 'casteRatio'>>;
+    }
+  /** Sandbox: live-tune a pheromone layer in every colony's field. */
+  | {
+      type: 'setPheromoneParams';
+      pheromone: PheromoneType;
+      params: { evaporation?: number; diffusion?: number };
+    };
 
 /** One-shot notifications from the sim, delivered in the snapshot of the tick they happened. */
 export type SimEvent =
@@ -418,6 +446,21 @@ export interface AntlionInfo {
   alive: boolean;
   hp: number;
   maxHp: number;
+}
+
+/** Sandbox economy and scent overrides applied on top of the config (also what a save restores). */
+export interface SandboxTuning {
+  /** Overrides applied to each colony's config (index = colony id). */
+  colonies: Partial<Omit<ColonyConfig, 'behaviorRatio' | 'casteRatio'>>[];
+  pheromones: Partial<Record<PheromoneType, { evaporation?: number; diffusion?: number }>>;
+}
+
+/** A rock as shown to the UI. */
+export interface ObstacleInfo {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
 }
 
 export interface WeatherInfo {
@@ -539,6 +582,8 @@ export interface Snapshot {
   spiders: SpiderInfo[];
   antlions: AntlionInfo[];
   weather: WeatherInfo;
+  /** The full rock list: sent on the first snapshot of a sim and whenever it changes. */
+  obstacles?: ObstacleInfo[];
 }
 
 /** Header summary of a save (also what the slot list shows). */
@@ -552,6 +597,8 @@ export interface SaveInfo {
   /** Live ants per colony (index = colony id). */
   populations: number[];
   queensAlive: boolean[];
+  /** Saved from a sandbox game (absent in older saves). */
+  sandbox?: boolean;
 }
 
 /** Main thread -> worker. */
@@ -572,6 +619,8 @@ export type WorkerOutMessage =
   | {
       type: 'ready';
       config: SimConfig;
+      /** Sandbox live-tuning in effect (see `SandboxTuning`); absent outside sandbox games. */
+      tuning?: SandboxTuning;
       /** Set when this is the answer to a `load`. */ requestId?: number;
     }
   | {

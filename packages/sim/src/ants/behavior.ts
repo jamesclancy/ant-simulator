@@ -2,6 +2,8 @@ import { ANT_CARRY_CAPACITY, AntState, Caste } from '@ant/shared';
 import type { AntBehaviorConfig, CombatConfig } from '@ant/shared';
 import type { PheromoneField } from '../pheromones';
 import type { Rng } from '../rng';
+import { slid } from '../world/obstacles';
+import type { ObstacleField } from '../world/obstacles';
 import type { World } from '../world';
 import type { Colony } from '../colony/colony';
 import type { AntStore } from './store';
@@ -11,6 +13,8 @@ import { senseCell, steerTowardsScent, turnTowards, wrapAngle } from './steering
 const MIN_STRENGTH = 0.01;
 /** Patrolling soldiers beyond `patrolRadius` turn back towards the nest at this rate. */
 const LEASH_TURN = 0.15;
+/** Ants look this many steps ahead for rocks and swerve before touching them. */
+const ROCK_LOOKAHEAD = 4;
 
 /** Per-colony layer handles, resolved once per tick (index = colony id). */
 interface Layers {
@@ -79,7 +83,8 @@ export function updateAnts(
   colonies: readonly Colony[],
 ): void {
   const { x, y, heading, carrying, state, strength, layer, role, caste, colony } = ants;
-  const { food } = world;
+  const { food, obstacles } = world;
+  const rocks = obstacles.count > 0 ? obstacles : null;
   const field = fields[0]!;
   const size = field.worldSize;
   const res = field.resolution;
@@ -116,11 +121,11 @@ export function updateAnts(
     const col = colonies[c]!;
     const k = caste[i]!;
     if (k === Caste.Soldier) {
-      updateSoldier(ants, i, L, fields, colonies, rng, cfg, combat, tickRate);
+      updateSoldier(ants, i, L, fields, colonies, rng, cfg, combat, tickRate, rocks);
       continue;
     }
     if (k === Caste.Breeder || role[i] !== 0) {
-      col.walkToNest(ants, i, rng, cfg, tickRate);
+      col.walkToNest(ants, i, rng, cfg, tickRate, rocks);
       continue;
     }
     const nest = col.nest;
@@ -187,8 +192,16 @@ export function updateAnts(
 
     // --- Move, bouncing off world edges -----------------------------------------------
     const v = loaded ? carryStep : step;
-    px += Math.cos(h) * v;
-    py += Math.sin(h) * v;
+    if (rocks) h = rocks.avoid(px, py, h, v * ROCK_LOOKAHEAD, i);
+    let nx = px + Math.cos(h) * v;
+    let ny = py + Math.sin(h) * v;
+    if (rocks) {
+      rocks.slide(px, py, nx, ny);
+      nx = slid.x;
+      ny = slid.y;
+    }
+    px = nx;
+    py = ny;
     if (px < 0 || px > size) {
       h = Math.PI - h;
       px = px < 0 ? 0 : size;
@@ -327,11 +340,12 @@ function updateSoldier(
   cfg: AntBehaviorConfig,
   combat: CombatConfig,
   tickRate: number,
+  rocks: ObstacleField | null,
 ): void {
   const c = ants.colony[i]!;
   const col = colonies[c]!;
   if (col.intruders > 0) {
-    col.walkToNest(ants, i, rng, cfg, tickRate);
+    col.walkToNest(ants, i, rng, cfg, tickRate, rocks);
     ants.state[i] = AntState.Wander;
     return;
   }
@@ -394,8 +408,14 @@ function updateSoldier(
   h += (rng.next() * 2 - 1) * cfg.jitter;
 
   const v = cfg.speed / tickRate;
+  if (rocks) h = rocks.avoid(px, py, h, v * ROCK_LOOKAHEAD, i);
   px += Math.cos(h) * v;
   py += Math.sin(h) * v;
+  if (rocks) {
+    rocks.slide(ants.x[i]!, ants.y[i]!, px, py);
+    px = slid.x;
+    py = slid.y;
+  }
   if (px < 0 || px > size) {
     h = Math.PI - h;
     px = px < 0 ? 0 : size;

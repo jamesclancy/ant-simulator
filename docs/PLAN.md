@@ -171,7 +171,7 @@ You are one ant (the "player ant") in a black ant colony fighting a red colony f
 - [ ] TestFlight / Play internal testing → store submission
 
 ### Phase 5 — Content & depth (ongoing)
-- [ ] Sandbox mode
+- [x] Sandbox mode ([docs/SANDBOX.md](SANDBOX.md))
 - [x] Hazards: rain/flooding, antlion (footsteps/lawnmower still to do)
 - [ ] Campaign: yard grid, breeder flights to found new colonies, house interior
 - [ ] Audio + music, art pass, accessibility (colorblind-safe red/black alternatives)

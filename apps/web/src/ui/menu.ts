@@ -1,5 +1,6 @@
 import type { Difficulty } from '@ant/shared';
 import { h, focusables, trapFocus } from './dom';
+import { DEFAULT_SANDBOX, type SandboxOptions } from '../sandbox/config';
 import {
   UI_SCALE_MAX,
   UI_SCALE_MIN,
@@ -10,11 +11,15 @@ import {
 } from './settings';
 import './ui.css';
 
+export type { SandboxOptions };
+
 export interface NewGameOptions {
   difficulty: Difficulty;
   /** Undefined = pick a random seed. */
   seed: number | undefined;
   tutorial: boolean;
+  /** Present for a sandbox game. */
+  sandbox?: SandboxOptions;
 }
 
 export interface MenuOptions {
@@ -27,7 +32,7 @@ export interface MenuOptions {
   onReplayTutorial(): void;
 }
 
-type Screen = 'main' | 'newGame' | 'settings' | 'howTo' | 'pause';
+type Screen = 'main' | 'newGame' | 'sandbox' | 'settings' | 'howTo' | 'pause';
 
 /** Parse the seed field: blank = random; digits only, capped to a positive 31-bit int. */
 export function parseSeed(text: string): number | undefined | null {
@@ -56,6 +61,8 @@ export class Menu {
   private continueHandler: (() => void) | null = null;
   private difficulty: Difficulty;
   private settingsSync: (() => void) | null = null;
+  /** Sandbox setup choices, kept while the menu lives. */
+  private sandbox: SandboxOptions = { ...DEFAULT_SANDBOX };
 
   constructor(private opts: MenuOptions) {
     this.difficulty = opts.difficulty;
@@ -132,9 +139,11 @@ export class Menu {
           ? this.pauseScreen()
           : screen === 'newGame'
             ? this.newGameScreen()
-            : screen === 'settings'
-              ? this.settingsScreen()
-              : this.howToScreen();
+            : screen === 'sandbox'
+              ? this.sandboxScreen()
+              : screen === 'settings'
+                ? this.settingsScreen()
+                : this.howToScreen();
     this.panel.replaceChildren(...body.nodes);
     this.panel.setAttribute('aria-labelledby', 'menu-title');
     this.root.dataset.screen = screen;
@@ -169,6 +178,7 @@ export class Menu {
     }
     list.append(
       newGame,
+      this.button('Sandbox', () => this.push('sandbox')),
       this.button('Settings', () => this.push('settings')),
       this.button('How to Play', () => this.push('howTo')),
     );
@@ -274,6 +284,121 @@ export class Menu {
         h('div', { class: 'menu-list' }, start, this.backButton()),
       ],
       focus: buttons.find((b) => b.d.value === this.difficulty)!.b,
+    };
+  }
+
+  private sandboxScreen(): { nodes: Node[]; focus?: HTMLElement } {
+    const o = this.sandbox;
+    const colonies = h('div', { class: 'segmented', role: 'group', 'aria-label': 'Colonies' });
+    const colonyButtons = (
+      [
+        [1, 'Black only'],
+        [2, 'Black & red'],
+      ] as const
+    ).map(([value, label]) => {
+      const b = h('button', { type: 'button', class: 'seg-btn' }, label);
+      b.addEventListener('click', () => {
+        o.colonies = value;
+        sync();
+      });
+      colonies.append(b);
+      return { value, b };
+    });
+    const sync = (): void => {
+      for (const { value, b } of colonyButtons) {
+        b.setAttribute('aria-pressed', String(value === o.colonies));
+      }
+      aiRow.hidden = o.colonies === 1;
+    };
+    const slider = (
+      id: string,
+      label: string,
+      key: 'ants' | 'foodPiles',
+      min: number,
+      max: number,
+      step: number,
+    ): HTMLElement => {
+      const input = h('input', {
+        id,
+        type: 'range',
+        min: String(min),
+        max: String(max),
+        step: String(step),
+      });
+      const out = h('output', { class: 'menu-value', for: id });
+      const show = (): void => {
+        input.value = String(o[key]);
+        out.textContent = String(o[key]);
+      };
+      input.addEventListener('input', () => {
+        o[key] = Number(input.value);
+        show();
+      });
+      show();
+      return h('label', { class: 'menu-row', for: id }, h('span', {}, label), input, out);
+    };
+    const check = (label: string, key: 'hazards' | 'ai' | 'winLose'): HTMLLabelElement => {
+      const input = h('input', { type: 'checkbox' });
+      input.checked = o[key];
+      input.addEventListener('change', () => (o[key] = input.checked));
+      return h('label', { class: 'menu-row' }, h('span', {}, label), input);
+    };
+    const aiRow = check('Red colony AI', 'ai');
+    const seed = h('input', {
+      id: 'sandbox-seed',
+      type: 'text',
+      inputmode: 'numeric',
+      autocomplete: 'off',
+      placeholder: 'Random',
+      maxlength: '10',
+    });
+    const seedHelp = h('p', { class: 'menu-hint', role: 'status' });
+    seed.addEventListener('input', () => {
+      seedHelp.textContent = parseSeed(seed.value) === null ? 'Seed must be a whole number.' : '';
+    });
+    const start = this.button(
+      'Start sandbox',
+      () => {
+        const parsed = parseSeed(seed.value);
+        if (parsed === null) {
+          seedHelp.textContent = 'Seed must be a whole number.';
+          seed.focus();
+          return;
+        }
+        this.opts.onNewGame({
+          difficulty: this.difficulty,
+          seed: parsed,
+          tutorial: false,
+          sandbox: { ...o },
+        });
+      },
+      'primary',
+    );
+    const form = h(
+      'div',
+      { class: 'menu-scroll' },
+      h('div', { class: 'menu-form' }, h('span', { class: 'menu-label' }, 'Colonies'), colonies),
+      slider('sb-ants', 'Starting ants', 'ants', 20, 1500, 20),
+      slider('sb-food', 'Food piles', 'foodPiles', 0, 20, 1),
+      check('Hazards (spiders, antlions, rain)', 'hazards'),
+      aiRow,
+      check('Win / lose conditions', 'winLose'),
+      h(
+        'div',
+        { class: 'menu-form' },
+        h('label', { class: 'menu-label', for: 'sandbox-seed' }, 'Seed'),
+        seed,
+        seedHelp,
+      ),
+    );
+    sync();
+    return {
+      nodes: [
+        this.title('Sandbox', 'Place food, rocks and ants, tune the sim. No pressure.'),
+        form,
+        h('div', { class: 'menu-list' }, start, this.backButton()),
+      ],
+      focus: colonyButtons.find((b) => b.value === o.colonies)!.b,
     };
   }
 
