@@ -419,7 +419,23 @@ export type SimEvent =
   | { type: 'rainStarted' }
   | { type: 'rainEnded' }
   /** A mob killed an antlion; it left food and its pit is now inert sand. */
-  | { type: 'antlionKilled'; x: number; y: number };
+  | { type: 'antlionKilled'; x: number; y: number }
+  /** Campaign: breeders of `colony` left on a mating flight; `founded` lists the patches that got a new colony. */
+  | { type: 'matingFlight'; colony: number; breeders: number; founded: number[] }
+  /** Campaign: a new colony of `colony` was founded in yard/house patch `patch`. */
+  | { type: 'colonyFounded'; colony: number; patch: number }
+  /** Campaign: the colony of `colony` in patch `patch` died out. */
+  | { type: 'colonyDestroyed'; colony: number; patch: number }
+  /** Campaign: the player switched to patch `patch` (the detailed world was rebuilt). */
+  | { type: 'patchEntered'; patch: number }
+  /** Campaign, house rooms: a human foot's shadow appears; it stamps down after `ticks`. */
+  | { type: 'footstepWarning'; x: number; y: number; ticks: number }
+  /** Campaign, house rooms: a foot stamped down, killing `kills` surface ants. */
+  | { type: 'footstep'; x: number; y: number; kills: number }
+  /** Campaign: a new season began (the seasonal mating flights happen at its start). */
+  | { type: 'season'; season: number }
+  /** Campaign: the campaign ended (`humansLeft` = victory, `lastColony` = defeat). */
+  | { type: 'campaignOver'; won: boolean; reason: 'humansLeft' | 'lastColony' };
 
 /** Spider behaviour states (`SpiderInfo.state`). */
 export const SpiderState = { Lurk: 0, Hunt: 1, Eat: 2, Retreat: 3, Dead: 4 } as const;
@@ -584,6 +600,10 @@ export interface Snapshot {
   weather: WeatherInfo;
   /** The full rock list: sent on the first snapshot of a sim and whenever it changes. */
   obstacles?: ObstacleInfo[];
+  /** Campaign games: the map overview, when it changed since the previous snapshot. */
+  campaign?: CampaignSnapshot;
+  /** Campaign house rooms: human feet over the patch (every snapshot while any are present). */
+  footsteps?: FootstepInfo[];
 }
 
 /** Header summary of a save (also what the slot list shows). */
@@ -599,7 +619,87 @@ export interface SaveInfo {
   queensAlive: boolean[];
   /** Saved from a sandbox game (absent in older saves). */
   sandbox?: boolean;
+  /** Saved from a campaign: patches with a black colony, out of `patches`. */
+  campaign?: { owned: number; patches: number; difficulty: Difficulty };
 }
+
+/** Campaign setup (main menu → Campaign → New). */
+export interface CampaignConfig {
+  seed: number;
+  difficulty: Difficulty;
+  /** Ant cap for the detailed patch (the performance governor's value). */
+  maxAnts?: number;
+}
+
+/** What a campaign patch is: open yard, or a room of the house. */
+export type PatchKind = 'yard' | 'room';
+
+/** One patch of the campaign map, as shown on the yard map screen. */
+export interface PatchInfo {
+  id: number;
+  /** Map cell; yard rows are 0..rows-1, the house sits above them (negative rows). */
+  col: number;
+  row: number;
+  kind: PatchKind;
+  /** Room name for house patches ('' in the yard). */
+  name: string;
+  /** Adult ants of each colony (0 = no colony there). */
+  black: number;
+  red: number;
+  /** Breeders waiting in each colony's nests. */
+  blackBreeders: number;
+  redBreeders: number;
+  /** Natural food lying around (not in nests). */
+  food: number;
+}
+
+/** Campaign overview: sent on entering a patch and whenever the map changes. */
+export interface CampaignSnapshot {
+  /** Bumped on every change; the UI redraws only when it moves. */
+  version: number;
+  difficulty: Difficulty;
+  cols: number;
+  rows: number;
+  patches: PatchInfo[];
+  /** The patch simulated in detail right now. */
+  active: number;
+  /** Patches with a black colony. */
+  owned: number;
+  /** Patches with a red colony. */
+  redOwned: number;
+  /** Black breeders across all colonies, and the minimum needed for a mating flight. */
+  breeders: number;
+  flightMin: number;
+  season: number;
+  /** 0..1 progress through the current season (the seasonal flights happen at 1). */
+  seasonProgress: number;
+  /** House infestation meter, 0..1: humans move out at 1. */
+  infestation: number;
+  /** Black ants in the house, and how many it takes to raise the meter. */
+  indoor: number;
+  indoorTarget: number;
+  /** '' while running. */
+  outcome: '' | 'victory' | 'defeat';
+}
+
+/** A human foot over a house room: a growing shadow, then a stamp. */
+export interface FootstepInfo {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+  /** 0..1 while the shadow grows; 1 at the stamp. */
+  progress: number;
+  /** True for the few ticks after it stamped down. */
+  stamped: boolean;
+}
+
+/** Campaign-only actions (main thread -> worker `campaign` message). */
+export type CampaignAction =
+  /** Collapse the current patch into its summary and build `patch` in detail (needs a black colony there). */
+  | { type: 'enterPatch'; patch: number }
+  /** Send every black colony's breeders on a mating flight now. */
+  | { type: 'matingFlight' };
 
 /** Main thread -> worker. */
 export type WorkerInMessage =
@@ -612,7 +712,11 @@ export type WorkerInMessage =
   /** Serialize the running sim; answered with `saved` (or `error`). */
   | { type: 'save'; requestId: number }
   /** Replace the sim with a saved one; answered with `ready` + a snapshot (or `error`). */
-  | { type: 'load'; requestId: number; bytes: Uint8Array };
+  | { type: 'load'; requestId: number; bytes: Uint8Array }
+  /** Start a new campaign (replaces any running game); answered like `init`. */
+  | { type: 'initCampaign'; config: CampaignConfig }
+  /** A campaign action (ignored outside campaigns). Entering a patch answers with `ready`. */
+  | { type: 'campaign'; action: CampaignAction };
 
 /** Worker -> main thread. */
 export type WorkerOutMessage =
@@ -622,6 +726,8 @@ export type WorkerOutMessage =
       /** Sandbox live-tuning in effect (see `SandboxTuning`); absent outside sandbox games. */
       tuning?: SandboxTuning;
       /** Set when this is the answer to a `load`. */ requestId?: number;
+      /** Present in campaign games: the overview (the active patch's kind decides its look). */
+      campaign?: CampaignSnapshot;
     }
   | {
       type: 'snapshot';

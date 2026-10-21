@@ -4,6 +4,7 @@ import type { Command } from '@ant/shared';
 import { createSim, restoreSim } from './sim';
 import { SaveError } from './save/format';
 import type { Sim } from './sim';
+import { Campaign, isCampaignSave, restoreCampaign } from './campaign';
 
 /** Minimal slice of the worker global scope, so this package needs no DOM/WebWorker lib. */
 export interface WorkerScope {
@@ -21,6 +22,10 @@ const now = (): number => performance.now();
  */
 export function runSimWorker(scope: WorkerScope): void {
   let sim: Sim | null = null;
+  /** Set in campaign games: owns `sim` (the detailed patch) and replaces it on a patch switch. */
+  let campaign: Campaign | null = null;
+  /** Send the campaign overview with the next snapshot even if unchanged. */
+  let sendCampaign = false;
   let paused = false;
   let speed = 1;
   let scentVision = false;
@@ -37,13 +42,37 @@ export function runSimWorker(scope: WorkerScope): void {
       (sendScentNow || paused || sim.tick - lastScentTick >= PHEROMONE_SNAPSHOT_INTERVAL);
     sendScentNow = false;
     if (wantScent) lastScentTick = sim.tick;
-    const snapshot = sim.snapshot({ pheromones: wantScent });
+    const snapshot = campaign
+      ? campaign.snapshot({ pheromones: wantScent, nestGrid: sendCampaign, campaign: sendCampaign })
+      : sim.snapshot({ pheromones: wantScent });
+    sendCampaign = false;
     const transfer: Transferable[] = [snapshot.ants.buffer];
     if (snapshot.player) transfer.push(snapshot.player.recruitedIndices.buffer);
     if (snapshot.pheromones) transfer.push(snapshot.pheromones.data.buffer);
     for (const g of snapshot.nestGrids ?? []) transfer.push(g.cells.buffer);
     for (const g of snapshot.waterGrids ?? []) transfer.push(g.levels.buffer);
     scope.postMessage({ type: 'snapshot', snapshot, speed: paused ? 0 : speed, simMs }, transfer);
+  };
+
+  const over = (): boolean => (campaign ? campaign.over : (sim?.winner ?? -1) !== -1);
+
+  /** A new game is running (new, loaded, or a campaign patch switch): reset the clock and tell the UI. */
+  const started = (requestId?: number): void => {
+    if (!sim) return;
+    paused = false;
+    acc = 0;
+    last = now();
+    pending = [];
+    lastScentTick = -Infinity;
+    sendCampaign = !!campaign;
+    scope.postMessage({
+      type: 'ready',
+      config: sim.config,
+      tuning: sim.tuning,
+      ...(requestId !== undefined ? { requestId } : {}),
+      ...(campaign ? { campaign: campaign.info() } : {}),
+    });
+    post();
   };
 
   const loop = (): void => {
@@ -55,18 +84,19 @@ export function runSimWorker(scope: WorkerScope): void {
       const tickMs = 1000 / sim.config.tickRate;
       let stepped = 0;
       const stepStart = now();
-      while (acc >= tickMs && stepped < 8 && sim.winner === -1) {
+      while (acc >= tickMs && stepped < 8 && !over()) {
         if (pending.length) {
           sim.applyCommands(pending);
           pending = [];
         }
-        sim.step();
+        if (campaign) campaign.step();
+        else sim.step();
         acc -= tickMs;
         stepped++;
       }
       if (stepped) post((now() - stepStart) / stepped);
       else if (acc > tickMs) acc = 0;
-      if (sim.winner !== -1) {
+      if (over()) {
         paused = true;
         acc = 0;
       }
@@ -76,15 +106,33 @@ export function runSimWorker(scope: WorkerScope): void {
 
   scope.onmessage = ({ data }) => {
     switch (data.type) {
+      case 'initCampaign':
+        campaign = new Campaign(data.config);
+        sim = campaign.sim;
+        started();
+        break;
+      case 'campaign': {
+        if (!campaign) break;
+        const action = data.action;
+        if (action.type === 'enterPatch') {
+          if (pending.length && sim) sim.applyCommands(pending);
+          const wasPaused = paused;
+          if (campaign.enter(action.patch)) {
+            sim = campaign.sim;
+            started();
+            // The map pauses the game; entering a patch keeps it as it was.
+            paused = wasPaused;
+          }
+        } else if (action.type === 'matingFlight') {
+          campaign.matingFlight();
+          post();
+        }
+        break;
+      }
       case 'init':
+        campaign = null;
         sim = createSim(data.config);
-        paused = false;
-        acc = 0;
-        last = now();
-        pending = [];
-        lastScentTick = -Infinity;
-        scope.postMessage({ type: 'ready', config: sim.config, tuning: sim.tuning });
-        post();
+        started();
         break;
       case 'commands':
         pending.push(...data.commands);
@@ -115,7 +163,7 @@ export function runSimWorker(scope: WorkerScope): void {
           break;
         }
         try {
-          const bytes = sim.serialize();
+          const bytes = (campaign ?? sim).serialize();
           scope.postMessage(
             { type: 'saved', requestId: data.requestId, bytes, info: sim.saveInfo() },
             [bytes.buffer],
@@ -132,7 +180,14 @@ export function runSimWorker(scope: WorkerScope): void {
         break;
       case 'load':
         try {
-          sim = restoreSim(data.bytes);
+          if (isCampaignSave(data.bytes)) {
+            const restored = restoreCampaign(data.bytes);
+            campaign = restored;
+            sim = restored.sim;
+          } else {
+            sim = restoreSim(data.bytes);
+            campaign = null;
+          }
         } catch (e) {
           // The running game (if any) is untouched.
           scope.postMessage({
@@ -144,18 +199,7 @@ export function runSimWorker(scope: WorkerScope): void {
           });
           break;
         }
-        paused = false;
-        acc = 0;
-        last = now();
-        pending = [];
-        lastScentTick = -Infinity;
-        scope.postMessage({
-          type: 'ready',
-          config: sim.config,
-          tuning: sim.tuning,
-          requestId: data.requestId,
-        });
-        post();
+        started(data.requestId);
         break;
       case 'setScentVision':
         scentVision = data.enabled;

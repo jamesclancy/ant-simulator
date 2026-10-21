@@ -78,6 +78,15 @@ export interface SimModule {
   setState(state: never): void;
 }
 
+/**
+ * Systems layered on top of a sim from outside it (the campaign): their modules are saved
+ * and restored with the sim's own, and `saveInfo` adds fields to the save header.
+ */
+export interface SimExtras {
+  modules?: readonly SimModule[];
+  saveInfo?: () => Partial<SaveInfo>;
+}
+
 /** The sim's full state tree: what `serialize` writes and `restoreSim` reads. */
 export interface SimState {
   config: SimConfig;
@@ -191,7 +200,7 @@ export function resolveConfig(partial: SimConfigInput = {}): SimConfig {
  * colonies (underground, economy) -> antlion pits -> weather (rain, flooding) -> remove the dead (corpses become food) -> AI directors
  * -> pheromone diffusion/evaporation -> game-over check.
  */
-export function createSim(partial: SimConfigInput = {}): Sim {
+export function createSim(partial: SimConfigInput = {}, extras: SimExtras = {}): Sim {
   const config = resolveConfig(partial);
   config.colonies = Math.max(1, Math.min(2, Math.floor(config.colonies)));
   const n = config.colonies;
@@ -442,6 +451,7 @@ export function createSim(partial: SimConfigInput = {}): Sim {
       },
     },
     // Add new stateful systems here.
+    ...(extras.modules ?? []),
   ];
 
   const saveInfo = (): SaveInfo => ({
@@ -452,6 +462,7 @@ export function createSim(partial: SimConfigInput = {}): Sim {
     populations: colonies.map((c) => c.population),
     queensAlive: colonies.map((c) => c.queenAlive),
     ...(config.sandbox ? { sandbox: true } : {}),
+    ...extras.saveInfo?.(),
   });
   const getState = (): SimState => ({
     config: { ...config, behavior: { ...config.behavior } },
@@ -712,9 +723,9 @@ function clamp(v: number, lo: number, hi: number): number {
  * newer-format files. The world is regenerated from the saved config (cheap), then every
  * module's state is overwritten, so stepping it matches the original tick for tick.
  */
-export function restoreSim(bytes: Uint8Array): Sim {
+export function restoreSim(bytes: Uint8Array, extras?: SimExtras): Sim {
   const state = decodeSave(bytes) as unknown as SimState;
-  const sim = createSim(state.config);
+  const sim = createSim(state.config, extras);
   sim.setState(state);
   return sim;
 }
