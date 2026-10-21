@@ -20,6 +20,7 @@ function yard(extra: SimConfigInput = {}) {
     foodSources: 0,
     colonies: 1,
     spiders: 0,
+    antlions: 0,
     colony: FROZEN,
     ...extra,
   });
@@ -43,7 +44,7 @@ function pin(sim: ReturnType<typeof yard>, x: number, y: number) {
 
 describe('spider', () => {
   it('is configured via spiders and placed away from the nests', () => {
-    const none = createSim({ spiders: 0 });
+    const none = createSim({ spiders: 0, antlions: 0 });
     expect(none.snapshot().spiders).toHaveLength(0);
     const two = createSim({ spiders: 2 });
     const snap = two.snapshot();

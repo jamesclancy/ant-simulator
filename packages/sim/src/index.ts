@@ -18,3 +18,5 @@ export { Director, DIRECTOR_PROFILES } from './ai';
 export type { DirectorProfile, DirectorState } from './ai';
 export { SpiderManager, SPIDER_DIFFICULTY } from './predators';
 export type { SpiderData, SpiderManagerState } from './predators';
+export { AntlionManager, Weather, Water, placeAntlions, RAIN_DIFFICULTY } from './hazards';
+export type { AntlionData, AntlionManagerState, WeatherState, WaterState } from './hazards';

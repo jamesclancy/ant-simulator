@@ -9,6 +9,7 @@ const NEST = WORLD / 2;
 function makeSim(opts: { ants?: number; seed?: number; pheromones?: boolean } = {}) {
   const sim = createSim({
     spiders: 0,
+    antlions: 0,
     seed: opts.seed ?? 1,
     worldSize: WORLD,
     initialAnts: opts.ants ?? 300,

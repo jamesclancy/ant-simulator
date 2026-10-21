@@ -75,6 +75,8 @@ export class PheromoneField {
   /** Per layer id: 0 = every update, else updated when `(updates + phase) % 2 === 0`. */
   private readonly half: number[] = [];
   private updates = 0;
+  /** Multiplies every layer's evaporation (weather); not saved, the weather re-applies it each tick. */
+  evaporationScale = 1;
 
   constructor(opts: PheromoneFieldOptions) {
     this.worldSize = opts.worldSize;
@@ -165,10 +167,11 @@ export class PheromoneField {
       if (!d) continue;
       const cfg = this.config[PHEROMONE_TYPES[t]!];
       const half = this.half[t];
+      const evaporation = Math.min(1, cfg.evaporation * this.evaporationScale);
       if (!half) {
-        this.blurAndEvaporate(d, cfg.diffusion, 1 - cfg.evaporation);
+        this.blurAndEvaporate(d, cfg.diffusion, 1 - evaporation);
       } else if ((u + half) % 2 === 0) {
-        const keep = 1 - cfg.evaporation;
+        const keep = 1 - evaporation;
         this.blurAndEvaporate(d, cfg.diffusion * 2, keep * keep);
       }
     }

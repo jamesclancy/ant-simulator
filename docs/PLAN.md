@@ -172,7 +172,7 @@ You are one ant (the "player ant") in a black ant colony fighting a red colony f
 
 ### Phase 5 — Content & depth (ongoing)
 - [ ] Sandbox mode
-- [ ] Hazards: rain/flooding, antlion, footsteps/lawnmower
+- [x] Hazards: rain/flooding, antlion (footsteps/lawnmower still to do)
 - [ ] Campaign: yard grid, breeder flights to found new colonies, house interior
 - [ ] Audio + music, art pass, accessibility (colorblind-safe red/black alternatives)
 - [ ] Optional: replays from the command log, daily-seed challenges

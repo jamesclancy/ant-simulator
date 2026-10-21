@@ -16,6 +16,8 @@ import { NestView, NEST_BACKGROUND } from './nest/nestView';
 import { ColonyPanel } from './nest/colonyPanel';
 import { DirtMound } from './nest/dirtMound';
 import { SpiderLayer } from './predators/spiderLayer';
+import { AntlionLayer } from './hazards/antlionLayer';
+import { WeatherLayer } from './hazards/weatherLayer';
 import { App } from '@capacitor/app';
 import { Menu, type NewGameOptions } from './ui/menu';
 import { SettingsStore } from './ui/settings';
@@ -46,6 +48,7 @@ interface Scene {
   mounds: DirtMound[];
   ants: AntLayer;
   spiders: SpiderLayer;
+  antlions: AntlionLayer;
   marker: PlayerMarker;
   nests: { view: NestView; ants: AntLayer; framed: boolean }[];
   focused: boolean;
@@ -75,6 +78,7 @@ async function main(): Promise<void> {
   app.stage.addChild(nestRoot);
   const nestCamera = new Camera(nestRoot, host);
   nestCamera.enabled = false;
+  const weather = new WeatherLayer(app.stage, app.screen);
   const settings = new SettingsStore();
   await settings.load();
   bindDocumentSettings(settings);
@@ -121,6 +125,10 @@ async function main(): Promise<void> {
     for (let c = 0; c < config.colonies; c++) mounds.push(new DirtMound(world, c));
     const ants = new AntLayer(app.renderer, world, { layer: 0 });
     const spiders = new SpiderLayer(world);
+    // Pits are ground texture: just above the grass, below everything that walks on it.
+    const antlions = new AntlionLayer(world);
+    world.addChildAt(antlions.view, 1);
+    antlions.setReduceMotion(settings.value.reduceMotion);
     const nests = [];
     for (let c = 0; c < config.colonies; c++) {
       const view = new NestView(c);
@@ -140,6 +148,7 @@ async function main(): Promise<void> {
       mounds,
       ants,
       spiders,
+      antlions,
       marker,
       nests,
       focused: false,
@@ -179,6 +188,8 @@ async function main(): Promise<void> {
       for (const m of g.mounds) m.update(snapshot);
       g.ants.push(snapshot, speed);
       g.spiders.update(snapshot);
+      g.antlions.update(snapshot);
+      weather.update(snapshot);
       const pl = snapshot.player;
       playerNow = pl && { x: pl.x, y: pl.y, heading: pl.heading, carrying: pl.carrying > 0 };
       playerInput.onSnapshot(pl, snapshot.events);
@@ -192,6 +203,7 @@ async function main(): Promise<void> {
         const colony = snapshot.colonies[c];
         if (!colony) return;
         n.ants.push(snapshot, speed);
+        n.view.setWater(snapshot.waterGrids?.find((w) => w.colony === c));
         n.view.update(
           snapshot.nestGrids?.find((grid) => grid.colony === c),
           colony,
@@ -209,7 +221,22 @@ async function main(): Promise<void> {
       latest = snapshot;
       if (snapshot.pheromones) g.scent.update(snapshot.pheromones);
       for (const ev of snapshot.events) {
-        if (ev.type === 'playerEaten') playerInput.toast('A spider ate your ant!');
+        if (ev.type === 'playerEaten') {
+          playerInput.toast(
+            ev.cause === 'antlion'
+              ? 'An antlion got your ant!'
+              : ev.cause === 'drowned'
+                ? 'Your ant drowned in the flood!'
+                : 'A spider ate your ant!',
+          );
+        }
+        if (ev.type === 'rainWarning') playerInput.toast('Dark clouds gather — rain is coming!');
+        if (ev.type === 'rainStarted')
+          playerInput.toast('Rain! Trails wash out and shallow tunnels flood');
+        if (ev.type === 'rainEnded')
+          playerInput.toast('The rain has stopped — the water drains away');
+        if (ev.type === 'antlionKilled')
+          playerInput.toast('The antlion is dead — its pit is harmless!');
         if (ev.type === 'spiderKilled') playerInput.toast('The spider is dead — it left a feast!');
         if (ev.type === 'queenKilled') {
           g.queenCause.set(ev.colony, ev.cause);
@@ -243,6 +270,8 @@ async function main(): Promise<void> {
 
   app.ticker.add(() => {
     fps.tick(app.ticker.FPS);
+    weather.setReduceMotion(settings.value.reduceMotion);
+    weather.tick(app.ticker.deltaMS);
     const g = game;
     if (!g) return;
     if (mode === 'menu') {
@@ -260,6 +289,7 @@ async function main(): Promise<void> {
     }
     g.ants.update();
     g.spiders.tick(app.ticker.deltaMS);
+    g.antlions.tick(app.ticker.deltaMS);
     const pos = g.ants.playerPos.valid ? g.ants.playerPos : null;
     g.marker.update(pos, playerNow?.heading ?? 0, playerNow?.carrying ?? false, camera.zoom);
     if (pos && playerInput.follow && mode === 'playing') camera.centerOn(pos.x, pos.y);
@@ -286,6 +316,7 @@ async function main(): Promise<void> {
     if (next === 1) showNest(viewNest);
     camera.enabled = next === 0;
     nestCamera.enabled = next === 1;
+    weather.setVisible(next === 0);
     app.renderer.background.color = next === 0 ? SURFACE_BACKGROUND : NEST_BACKGROUND;
     layerBtn.textContent = next === 0 ? 'Nest' : 'Surface';
     layerBtn.setAttribute('aria-label', next === 0 ? 'Show nest' : 'Show surface');
@@ -480,6 +511,22 @@ async function main(): Promise<void> {
     add('Look at spider', (s) => {
       const sp = s.spiders.find((k) => k.hp > 0);
       if (sp) camera.focus(sp.x, sp.y, 1.5);
+    });
+    add('Start rain', () => sim.sendCommands([{ type: 'startRain', ticks: 900 }]));
+    add('Add antlion pit (+6 ants)', (s) => {
+      const p = near(s, PLAYER_COLONY);
+      const x = p.x + 240;
+      const y = p.y - 240;
+      sim.sendCommands([
+        { type: 'addAntlion', x, y },
+        { type: 'spawnAnts', count: 6, x: x + 36, y, colony: PLAYER_COLONY, caste: Caste.Worker },
+      ]);
+      playerInput.setFollow(false);
+      camera.focus(x, y, 2);
+    });
+    add('Look at pit', (s) => {
+      const a = s.antlions[s.antlions.length - 1];
+      if (a) camera.focus(a.x, a.y, 1.5);
     });
     add('Red raid on', () => sim.sendCommands([{ type: 'setRaid', colony: RED_COLONY, on: true }]));
     panel.appendChild(row);

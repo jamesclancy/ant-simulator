@@ -42,6 +42,7 @@ export function runSimWorker(scope: WorkerScope): void {
     if (snapshot.player) transfer.push(snapshot.player.recruitedIndices.buffer);
     if (snapshot.pheromones) transfer.push(snapshot.pheromones.data.buffer);
     for (const g of snapshot.nestGrids ?? []) transfer.push(g.cells.buffer);
+    for (const g of snapshot.waterGrids ?? []) transfer.push(g.levels.buffer);
     scope.postMessage({ type: 'snapshot', snapshot, speed: paused ? 0 : speed }, transfer);
   };
 

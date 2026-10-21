@@ -1,4 +1,11 @@
-import type { AntBehaviorConfig, ColonyConfig, CombatConfig, SpiderConfig } from './types';
+import type {
+  AntBehaviorConfig,
+  AntlionConfig,
+  ColonyConfig,
+  CombatConfig,
+  RainConfig,
+  SpiderConfig,
+} from './types';
 
 /** Fixed simulation rate. The renderer interpolates between ticks. */
 export const TICK_RATE_HZ = 20;
@@ -140,3 +147,42 @@ export const DEFAULT_SPIDER: Readonly<SpiderConfig> = {
 };
 
 export const DEFAULT_SPIDER_COUNT = 1;
+
+/** Antlion pit: a few workers or two soldiers walking in together can overwhelm it. */
+export const DEFAULT_ANTLION: Readonly<AntlionConfig> = {
+  radius: 46,
+  killRadius: 7,
+  pull: 1.5,
+  escape: 0.012,
+  soldierEscape: 3,
+  playerEscape: 3,
+  crowdEscape: 0.15,
+  hp: 90,
+  mobSize: 10,
+  soldierMobWeight: 3,
+  damage: [0.15, 0.4, 0.05],
+  foodDrop: 100,
+};
+
+export const DEFAULT_ANTLION_COUNT = 2;
+
+/** Rain: a shower every 3-6 minutes lasting 35-70 seconds. */
+export const DEFAULT_RAIN: Readonly<RainConfig> = {
+  enabled: true,
+  minGap: 3600,
+  maxGap: 7200,
+  minDuration: 700,
+  maxDuration: 1400,
+  warningTicks: 200,
+  rampTicks: 100,
+  evaporationMult: 8,
+  surfaceSpeed: 0.7,
+  inflow: 0.5,
+  flow: 0.25,
+  seep: 0.0015,
+  drain: 0.002,
+  drownLevel: 0.3,
+  drownDamage: 0.1,
+  broodLevel: 0.25,
+  broodKill: 0.003,
+};
