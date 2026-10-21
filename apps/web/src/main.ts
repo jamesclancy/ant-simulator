@@ -41,6 +41,7 @@ import { SettingsStore } from './ui/settings';
 import { bindDocumentSettings, createFpsMeter } from './ui/applySettings';
 import { TutorialPanel } from './ui/tutorialPanel';
 import { registerServiceWorker } from './pwa';
+import { bindMuteButton, createAudio, type DirectorContext } from './audio';
 
 const SURFACE_BACKGROUND = 0x1b2a1b;
 /** Underground ant tints (index = colony): light so they read against dark tunnels. */
@@ -117,6 +118,8 @@ async function main(): Promise<void> {
   bindDocumentSettings(settings);
   const fps = createFpsMeter();
   haptics.enabled = settings.value.haptics;
+  const audio = createAudio(settings);
+  bindMuteButton(document.getElementById('mute')!, settings);
   /** `menu`: ambient backdrop behind the main menu; `playing`: a real game (maybe paused). */
   let mode: 'menu' | 'playing' = 'menu';
   let backdropFrozen = false;
@@ -307,6 +310,7 @@ async function main(): Promise<void> {
         camera.focus(home.x, home.y, 1.5);
       }
       latest = snapshot;
+      audio.director.onSnapshot(snapshot, audioContext());
       if (snapshot.pheromones) g.scent.update(snapshot.pheromones);
       for (const ev of snapshot.events) {
         if (ev.type === 'playerEaten') {
@@ -343,6 +347,17 @@ async function main(): Promise<void> {
       warnIntruders(snapshot);
     },
   });
+  const audioContext = (): DirectorContext => {
+    const r = host.getBoundingClientRect();
+    const c = toWorld(r.left + r.width / 2, r.top + r.height / 2);
+    return {
+      mode,
+      layer,
+      paused: paused || menu.isOpen,
+      zoom: camera.zoom,
+      view: { x: c.x, y: c.y, halfWidth: r.width / 2 / camera.zoom },
+    };
+  };
   const toWorld = (cx: number, cy: number): { x: number; y: number } => {
     const r = host.getBoundingClientRect();
     return world.toLocal({ x: cx - r.left, y: cy - r.top });
@@ -846,6 +861,7 @@ async function main(): Promise<void> {
         tool: sandbox.toolMode,
         rocks: rockCount,
         speed,
+        audio: audio.backend.debugState(),
       }),
       send: (commands) => sim.sendCommands(commands),
     };
@@ -875,6 +891,7 @@ async function main(): Promise<void> {
     if (lastAutosaveTick < 0) lastAutosaveTick = s.tick;
     else if (s.tick - lastAutosaveTick >= AUTOSAVE_TICKS) autosave();
     nestSwitch.hidden = layer === 0 || !enemyNestKnown();
+    audio.director.idle(audioContext());
   }, 250);
 }
 

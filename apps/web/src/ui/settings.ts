@@ -12,9 +12,11 @@ export interface Settings {
   /** HUD / menu scale, 0.8..1.5. */
   uiScale: number;
   reduceMotion: boolean;
-  /** 0..1; stored for the audio layer to come. */
+  /** 0..1 volume of sound effects and of music. */
   soundVolume: number;
   musicVolume: number;
+  /** Global mute (HUD button), keeps the volume sliders as they are. */
+  muted: boolean;
   showFps: boolean;
   /** Vibrate on pickup/recruit, attacks and queen death (native app only). */
   haptics: boolean;
@@ -37,6 +39,7 @@ export const DEFAULT_SETTINGS: Settings = {
   reduceMotion: false,
   soundVolume: 0.8,
   musicVolume: 0.5,
+  muted: false,
   showFps: false,
   haptics: true,
   batterySaver: false,
@@ -67,6 +70,7 @@ export function sanitizeSettings(raw: unknown, base: Settings = DEFAULT_SETTINGS
     reduceMotion: bool(r.reduceMotion, base.reduceMotion),
     soundVolume: clamp(r.soundVolume, 0, 1, base.soundVolume),
     musicVolume: clamp(r.musicVolume, 0, 1, base.musicVolume),
+    muted: bool(r.muted, base.muted),
     showFps: bool(r.showFps, base.showFps),
     haptics: bool(r.haptics, base.haptics),
     batterySaver: bool(r.batterySaver, base.batterySaver),

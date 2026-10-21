@@ -411,7 +411,14 @@ export class Menu {
     };
     const toggle = (
       label: string,
-      key: 'scentVision' | 'followCamera' | 'reduceMotion' | 'showFps' | 'haptics' | 'batterySaver',
+      key:
+        | 'scentVision'
+        | 'followCamera'
+        | 'reduceMotion'
+        | 'showFps'
+        | 'haptics'
+        | 'batterySaver'
+        | 'muted',
     ): HTMLElement => {
       const input = h('input', { type: 'checkbox' });
       input.addEventListener('change', () => settings.update({ [key]: input.checked }));
@@ -478,6 +485,7 @@ export class Menu {
       toggle('Battery saver (30 fps)', 'batterySaver'),
       toggle('Haptics', 'haptics'),
       h('h2', { class: 'menu-group' }, 'Audio'),
+      toggle('Mute all sound', 'muted'),
       slider('Sound volume', 'soundVolume', 0, 1, 0.05),
       slider('Music volume', 'musicVolume', 0, 1, 0.05),
     );

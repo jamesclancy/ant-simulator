@@ -18,6 +18,15 @@ export interface AntDebugState {
   rocks: number;
   /** Selected game speed step. */
   speed: number;
+  /** Audio engine probe: context state ('none' until the first gesture), active voices, music. */
+  audio: {
+    context: string;
+    voices: number;
+    track: 'menu' | 'game' | null;
+    sfxGain: number;
+    musicGain: number;
+    masterGain: number;
+  };
 }
 
 declare global {
