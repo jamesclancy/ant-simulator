@@ -1,0 +1,287 @@
+/*
+ * Retro pixel theme. Loaded last so it restyles every panel and button: square corners,
+ * stepped bevels instead of blur, one pixel font, and a few CSS variables (--c0, --c1,
+ * --player, --accent are set from the active accessibility palette by art/applyPalette).
+ */
+@font-face {
+  font-family: 'Pixelify Sans';
+  src: url('../assets/fonts/PixelifySans.ttf') format('truetype');
+  font-weight: 400 700;
+  font-display: swap;
+}
+
+:root {
+  --font: 'Pixelify Sans', ui-monospace, 'Courier New', monospace;
+  --ink: #f4ecd2;
+  --ink-dim: #c9bd98;
+  --panel: #2b2114;
+  --panel-hi: #4a3a22;
+  --panel-lo: #17100a;
+  --edge: #0b0703;
+  --btn: #4f7a32;
+  --btn-hi: #7aa84c;
+  --btn-lo: #2f4a1e;
+  --btn-on: #ffd84a;
+  --btn-on-hi: #fff0a0;
+  --btn-on-lo: #b8901c;
+  --danger: #a8341f;
+  --accent: #ffd84a;
+  --c0: #2b2b36;
+  --c1: #d03a22;
+  --player: #ffd21a;
+}
+
+html,
+body {
+  font-family: var(--font);
+  background: #3f6a2e;
+  letter-spacing: 0.02em;
+}
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font);
+}
+html {
+  image-rendering: pixelated;
+}
+
+/* Stepped bevel used by every panel. */
+.bar,
+.menu-card,
+#gameover .card,
+#tutorial,
+#colony-panel,
+.sandbox-panel,
+#sandbox-body,
+#save-menu,
+.tuning,
+#update-bar,
+#toast,
+#fps {
+  border-radius: 0;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 2px var(--edge),
+    inset 2px 2px 0 var(--panel-hi),
+    inset -2px -2px 0 var(--panel-lo);
+}
+.bar {
+  gap: 6px;
+  padding: 8px;
+  font-size: 15px;
+}
+#toast {
+  padding: 8px 14px;
+  background: var(--panel-lo);
+  color: var(--accent);
+}
+
+/* Buttons: chunky bevel that presses in. */
+button {
+  border-radius: 0;
+  background: var(--btn);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow:
+    0 0 0 2px var(--edge),
+    inset 2px 2px 0 var(--btn-hi),
+    inset -2px -2px 0 var(--btn-lo);
+  text-shadow: 1px 1px 0 var(--edge);
+}
+button:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+button:active:not(:disabled) {
+  box-shadow:
+    0 0 0 2px var(--edge),
+    inset 2px 2px 0 var(--btn-lo),
+    inset -2px -2px 0 var(--btn-hi);
+  transform: translateY(1px);
+}
+button[aria-pressed='true'],
+#p-trail[aria-pressed='true'],
+#p-follow[aria-pressed='true'] {
+  background: var(--btn-on);
+  color: #2a1c00;
+  text-shadow: none;
+  box-shadow:
+    0 0 0 2px var(--edge),
+    inset 2px 2px 0 var(--btn-on-hi),
+    inset -2px -2px 0 var(--btn-on-lo);
+}
+.menu-btn.primary,
+#gameover button,
+.tut-next {
+  background: var(--btn-on);
+  color: #2a1c00;
+  text-shadow: none;
+  box-shadow:
+    0 0 0 2px var(--edge),
+    inset 2px 2px 0 var(--btn-on-hi),
+    inset -2px -2px 0 var(--btn-on-lo);
+}
+.menu-btn.secondary {
+  background: var(--panel-hi);
+  box-shadow:
+    0 0 0 2px var(--edge),
+    inset 2px 2px 0 #6a5732,
+    inset -2px -2px 0 var(--panel-lo);
+}
+.menu-btn.danger {
+  background: var(--danger);
+  box-shadow:
+    0 0 0 2px var(--edge),
+    inset 2px 2px 0 #d8654a,
+    inset -2px -2px 0 #5c1608;
+}
+#update-bar button {
+  border-radius: 0;
+  background: var(--btn);
+}
+
+/* Menu */
+#menu {
+  background: rgb(16 28 10 / 70%);
+  background-image: repeating-linear-gradient(0deg, rgb(0 0 0 / 14%) 0 2px, transparent 2px 4px);
+}
+.menu-head h1 {
+  color: var(--accent);
+  font-size: 34px;
+  text-shadow:
+    3px 3px 0 var(--edge),
+    -1px -1px 0 var(--edge);
+  letter-spacing: 0.06em;
+}
+.menu-sub,
+.menu-hint,
+.menu-label {
+  color: var(--ink-dim);
+  opacity: 1;
+}
+.menu-group {
+  color: var(--accent);
+  border-bottom: 2px solid var(--panel-hi);
+}
+.menu-form input[type='text'],
+select,
+.menu-row select {
+  border: 0;
+  border-radius: 0;
+  background: var(--panel-lo);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 2px var(--edge),
+    inset 2px 2px 0 #000;
+}
+select,
+.menu-row select {
+  min-height: 44px;
+  padding: 0 8px;
+  font: inherit;
+}
+.menu-check input,
+.menu-row input[type='checkbox'],
+.menu-row input[type='range'],
+input[type='range'] {
+  accent-color: var(--accent);
+}
+.menu-table th,
+.menu-table td {
+  border-color: var(--panel-hi);
+}
+[tabindex]:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Game over, tutorial, panels */
+#gameover {
+  background: rgb(10 14 6 / 65%);
+}
+#gameover .card {
+  box-shadow:
+    0 0 0 3px var(--edge),
+    inset 3px 3px 0 var(--panel-hi),
+    inset -3px -3px 0 var(--panel-lo);
+}
+#gameover.win h2 {
+  color: var(--accent);
+}
+#gameover.lose h2 {
+  color: #ff8a6a;
+}
+#gameover h2 {
+  text-shadow: 3px 3px 0 var(--edge);
+}
+#tutorial h2,
+#colony-panel summary,
+.sandbox-panel h2,
+.tuning summary {
+  color: var(--accent);
+}
+
+/* Colony pips: shape as well as colour (circle = black colony, diamond = red). */
+.pop-black::before,
+.pop-red::before {
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  border-radius: 0;
+  vertical-align: -2px;
+  box-shadow: none;
+}
+.pop-black::before {
+  background: var(--c0);
+  clip-path: polygon(25% 0, 75% 0, 100% 25%, 100% 75%, 75% 100%, 25% 100%, 0 75%, 0 25%);
+  outline: 0;
+  border: 0;
+  filter: drop-shadow(0 0 0 #fff);
+}
+.pop-red::before {
+  background: var(--c1);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.pop-black,
+.pop-red {
+  padding: 2px 6px;
+  background: var(--panel-lo);
+  box-shadow: inset 0 0 0 1px var(--panel-hi);
+}
+html[data-palette='highContrast'] {
+  --panel: #000;
+  --panel-hi: #fff;
+  --panel-lo: #000;
+  --ink: #fff;
+  --ink-dim: #fff;
+  --btn: #000;
+  --btn-hi: #fff;
+  --btn-lo: #fff;
+  --btn-on: #ff0;
+  --btn-on-hi: #fff;
+  --btn-on-lo: #ff0;
+  --edge: #fff;
+}
+html[data-palette='highContrast'] .pop-black::before {
+  box-shadow: none;
+  background: #000;
+  outline: 2px solid #fff;
+}
+
+#joystick {
+  border-radius: 0;
+  border: 3px solid var(--player);
+  background: rgb(0 0 0 / 40%);
+  clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+}
+#joystick-knob {
+  border-radius: 0;
+  background: var(--player);
+  clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+}

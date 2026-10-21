@@ -45,6 +45,8 @@ import { SettingsStore } from './ui/settings';
 import { bindDocumentSettings, createFpsMeter } from './ui/applySettings';
 import { TutorialPanel } from './ui/tutorialPanel';
 import { registerServiceWorker } from './pwa';
+// Last, so the retro theme overrides every panel's own stylesheet.
+import './ui/theme.css';
 import { bindMuteButton, createAudio, type DirectorContext } from './audio';
 import { CampaignUi, latestCampaignSlot } from './campaign';
 
