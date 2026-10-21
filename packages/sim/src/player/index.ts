@@ -5,6 +5,7 @@ import type { AntStore } from '../ants/store';
 import type { PheromoneField } from '../pheromones';
 import type { Rng } from '../rng';
 import type { World } from '../world';
+import { slid } from '../world/obstacles';
 
 /** Player walking speed relative to `behavior.speed`. */
 export const PLAYER_SPEED_FACTOR = 1.6;
@@ -286,8 +287,15 @@ export class PlayerController {
     }
     if (ants.carrying[i]! > 0) speed *= cfg.carrySpeedFactor;
     // Slide along world edges instead of bouncing.
-    px = clamp(px + Math.cos(h) * speed, 0, this.worldSize);
-    py = clamp(py + Math.sin(h) * speed, 0, this.worldSize);
+    let nx = clamp(px + Math.cos(h) * speed, 0, this.worldSize);
+    let ny = clamp(py + Math.sin(h) * speed, 0, this.worldSize);
+    if (this.world.obstacles.count > 0) {
+      this.world.obstacles.slide(px, py, nx, ny);
+      nx = slid.x;
+      ny = slid.y;
+    }
+    px = nx;
+    py = ny;
     ants.x[i] = px;
     ants.y[i] = py;
     ants.heading[i] = wrapAngle(h);
@@ -366,8 +374,16 @@ export class PlayerController {
         h = turnTowards(h, Math.atan2(dy, dx), cfg.turnRate * 2);
         h += (this.rng.next() * 2 - 1) * cfg.jitter * 0.5;
         const v = dist > CATCH_UP_DIST ? step * 1.5 : Math.min(step, dist);
-        x = clamp(x + Math.cos(h) * v, 0, this.worldSize);
-        y = clamp(y + Math.sin(h) * v, 0, this.worldSize);
+        const nx = clamp(x + Math.cos(h) * v, 0, this.worldSize);
+        const ny = clamp(y + Math.sin(h) * v, 0, this.worldSize);
+        if (world.obstacles.count > 0) {
+          world.obstacles.slide(x, y, nx, ny);
+          x = slid.x;
+          y = slid.y;
+        } else {
+          x = nx;
+          y = ny;
+        }
       } else {
         this.rng.next();
       }

@@ -27,9 +27,11 @@ import {
 } from '@ant/shared';
 import type {
   Command,
+  PheromoneType,
   NestGridSnapshot,
   SimConfig,
   SimConfigInput,
+  SandboxTuning,
   SimEvent,
   Snapshot,
 } from '@ant/shared';
@@ -44,7 +46,7 @@ import { SpiderManager } from './predators';
 import { AntlionManager, Weather, placeAntlions } from './hazards';
 import { PlayerController, isPlayerCommand } from './player';
 import { createRng } from './rng';
-import { createWorld } from './world';
+import { MAX_OBSTACLE_RADIUS, MIN_OBSTACLE_RADIUS, createWorld } from './world';
 import { SAVE_VERSION, decodeSave, encodeSave } from './save/format';
 import type { SaveInfo } from './save/format';
 import { getAntsState, setAntsState } from './ants/store';
@@ -55,6 +57,9 @@ import type { ColonyState } from './colony/colony';
 import type { DirectorSaveState } from './ai/director';
 import type { PlayerState } from './player';
 import type { World } from './world';
+
+type ColonyTuning = SandboxTuning['colonies'][number];
+type PheromoneTuning = { evaporation?: number; diffusion?: number };
 
 /** Corpse food within this distance of an existing pile is merged into it. */
 const CORPSE_MERGE_RADIUS = 14;
@@ -115,6 +120,8 @@ export interface Sim {
   readonly antlions: AntlionManager;
   /** Rain and the flooding it causes. */
   readonly weather: Weather;
+  /** Sandbox live-tuning applied so far (a copy). */
+  readonly tuning: SandboxTuning;
   /** -1 while running; else the winning colony id, or -2 if none is left. */
   readonly winner: number;
   applyCommands(commands: readonly Command[]): void;
@@ -132,9 +139,10 @@ export interface Sim {
    * Copy current state into a fresh, transferable snapshot. Pheromone data (the player
    * colony's field) is included when `options.pheromones` is true, or by default every
    * `PHEROMONE_SNAPSHOT_INTERVAL` ticks. Nest grids are included when they changed since
-   * the previous snapshot, or all of them when `options.nestGrid` is true.
+   * the previous snapshot, or all of them when `options.nestGrid` is true. Sandbox rocks follow
+   * the same rule (`options.obstacles`).
    */
-  snapshot(options?: { pheromones?: boolean; nestGrid?: boolean }): Snapshot;
+  snapshot(options?: { pheromones?: boolean; nestGrid?: boolean; obstacles?: boolean }): Snapshot;
 }
 
 export function resolveConfig(partial: SimConfigInput = {}): SimConfig {
@@ -154,6 +162,9 @@ export function resolveConfig(partial: SimConfigInput = {}): SimConfig {
     nestRadius: DEFAULT_NEST_RADIUS,
     spiders: DEFAULT_SPIDER_COUNT,
     antlions: DEFAULT_ANTLION_COUNT,
+    sandbox: false,
+    ai: true,
+    winLose: true,
     ...rest,
     spider: {
       ...DEFAULT_SPIDER,
@@ -255,6 +266,8 @@ export function createSim(partial: SimConfigInput = {}): Sim {
   const remap = new Int32Array(ants.capacity);
   let tick = 0;
   let winner = -1;
+  /** Obstacle list version last sent in a snapshot (-1: none yet). */
+  let sentRocks = -1;
 
   const spawn = (
     count: number,
@@ -332,8 +345,73 @@ export function createSim(partial: SimConfigInput = {}): Sim {
     player.applyRemap(remap, old);
   };
 
+  /**
+   * Sandbox tuning of the colonies' economy and the pheromone layers, remembered so a save
+   * restores it exactly (a loaded sim rebuilds its colonies from the unmodified config).
+   */
+  const tuning: SandboxTuning = { colonies: colonies.map(() => ({})), pheromones: {} };
+  const tuneColonies = (only: number | undefined, params: ColonyTuning): void => {
+    for (const c of colonies) {
+      if (only !== undefined && only !== c.id) continue;
+      Object.assign(c.config, params);
+      Object.assign(tuning.colonies[c.id]!, params);
+    }
+  };
+  const tunePheromone = (type: PheromoneType, params: PheromoneTuning): void => {
+    if (!fields[0]!.has(type)) return;
+    for (const f of fields) Object.assign(f.config[type], params);
+    tuning.pheromones[type] = { ...tuning.pheromones[type], ...params };
+  };
+
+  /** Largest gap kept between a rock and a nest entrance so colonies can't be walled in. */
+  const NEST_CLEARANCE = 1.8;
+  const MAX_ROCKS = 600;
+  const placeRock = (x: number, y: number, radius: number): void => {
+    const obs = world.obstacles;
+    if (obs.count >= MAX_ROCKS || !(radius > 0)) return;
+    const r = Math.min(MAX_OBSTACLE_RADIUS, Math.max(MIN_OBSTACLE_RADIUS, radius));
+    for (const nest of world.nests) {
+      if (Math.hypot(nest.x - x, nest.y - y) < nest.radius * NEST_CLEARANCE + r) return;
+    }
+    obs.add(x, y, r);
+    // Rocks land on top of whatever was there: food is crushed, ants are pushed out.
+    for (const f of [...world.food.list()]) {
+      if (Math.hypot(f.x - x, f.y - y) < r + f.radius * 0.5) world.food.remove(f.id);
+    }
+    for (let i = 0; i < ants.count; i++) {
+      if (ants.layer[i] !== 0) continue;
+      // Overlapping rocks: keep pushing until the ant stands clear of all of them.
+      for (let pass = 0; pass < 8; pass++) {
+        const rock = obs.rockAt(ants.x[i]!, ants.y[i]!);
+        if (!rock) break;
+        const dx = ants.x[i]! - rock.x;
+        const dy = ants.y[i]! - rock.y;
+        const a = dx || dy ? Math.atan2(dy, dx) : (i * 2.399963) % (Math.PI * 2);
+        ants.x[i] = clamp(rock.x + Math.cos(a) * (rock.radius + 1.5), 0, config.worldSize);
+        ants.y[i] = clamp(rock.y + Math.sin(a) * (rock.radius + 1.5), 0, config.worldSize);
+      }
+    }
+  };
+
+  /** Sandbox eraser: surface ants (not the player), food, rocks, pits and spiders in the disc. */
+  const erase = (x: number, y: number, radius: number): void => {
+    const r2 = radius * radius;
+    for (let i = 0; i < ants.count; i++) {
+      if (ants.layer[i] !== 0 || i === player.index) continue;
+      const dx = ants.x[i]! - x;
+      const dy = ants.y[i]! - y;
+      if (dx * dx + dy * dy <= r2) ants.hp[i] = STARVED_HP;
+    }
+    for (const f of [...world.food.list()]) {
+      if (Math.hypot(f.x - x, f.y - y) <= radius + f.radius) world.food.remove(f.id);
+    }
+    world.obstacles.removeNear(x, y, radius);
+    antlions.removeNear(x, y, radius);
+    spiders.removeNear(x, y, radius);
+  };
+
   const checkGameOver = (): void => {
-    if (winner !== -1 || n < 2) return;
+    if (winner !== -1 || n < 2 || !config.winLose) return;
     const alive = colonies.filter((c) => c.queenAlive);
     if (alive.length > 1) return;
     winner = alive[0]?.id ?? -2;
@@ -348,6 +426,21 @@ export function createSim(partial: SimConfigInput = {}): Sim {
       setState: (st) => antlions.setState(st),
     },
     { key: 'weather', getState: () => weather.getState(), setState: (st) => weather.setState(st) },
+    {
+      key: 'obstacles',
+      getState: () => world.obstacles.getState(),
+      setState: (st) => world.obstacles.setState(st),
+    },
+    {
+      key: 'tuning',
+      getState: () => structuredClone(tuning),
+      setState: (st: SandboxTuning) => {
+        st.colonies.forEach((params, id) => tuneColonies(id, params));
+        for (const [type, params] of Object.entries(st.pheromones)) {
+          tunePheromone(type as PheromoneType, params);
+        }
+      },
+    },
     // Add new stateful systems here.
   ];
 
@@ -358,6 +451,7 @@ export function createSim(partial: SimConfigInput = {}): Sim {
     winner,
     populations: colonies.map((c) => c.population),
     queensAlive: colonies.map((c) => c.queenAlive),
+    ...(config.sandbox ? { sandbox: true } : {}),
   });
   const getState = (): SimState => ({
     config: { ...config, behavior: { ...config.behavior } },
@@ -421,6 +515,9 @@ export function createSim(partial: SimConfigInput = {}): Sim {
     spiders,
     antlions,
     weather,
+    get tuning() {
+      return structuredClone(tuning);
+    },
     applyCommands(commands) {
       for (const cmd of commands) {
         if (isPlayerCommand(cmd)) {
@@ -470,8 +567,29 @@ export function createSim(partial: SimConfigInput = {}): Sim {
           case 'startRain':
             weather.start(cmd.ticks, events);
             break;
+          case 'stopRain':
+            weather.stop();
+            break;
           case 'addAntlion':
             antlions.add(clamp(cmd.x, 0, config.worldSize), clamp(cmd.y, 0, config.worldSize));
+            break;
+          case 'placeObstacle':
+            if (config.sandbox) placeRock(cmd.x, cmd.y, cmd.radius);
+            break;
+          case 'clearObstacles':
+            if (config.sandbox) world.obstacles.clear();
+            break;
+          case 'erase':
+            if (config.sandbox) erase(cmd.x, cmd.y, cmd.radius);
+            break;
+          case 'setCombat':
+            if (config.sandbox) Object.assign(config.combat, cmd.params);
+            break;
+          case 'setColonyParams':
+            if (config.sandbox) tuneColonies(cmd.colony, cmd.params);
+            break;
+          case 'setPheromoneParams':
+            if (config.sandbox) tunePheromone(cmd.pheromone, cmd.params);
             break;
           case 'setRaid': {
             const c = colonies[cmd.colony ?? 0];
@@ -517,7 +635,7 @@ export function createSim(partial: SimConfigInput = {}): Sim {
       }
       weather.step({ ants, colonies, fields, playerIndex: player.index, antStep, events });
       reap();
-      for (const d of directors) d.update(tick);
+      if (config.ai) for (const d of directors) d.update(tick);
       for (const f of fields) f.update();
       checkGameOver();
       tick++;
@@ -558,6 +676,12 @@ export function createSim(partial: SimConfigInput = {}): Sim {
         antlions: antlions.info(),
         weather: weather.info(),
       };
+      if (config.sandbox && (options?.obstacles || sentRocks !== world.obstacles.version)) {
+        sentRocks = world.obstacles.version;
+        snap.obstacles = world.obstacles
+          .list()
+          .map(({ id, x, y, radius }) => ({ id, x, y, radius }));
+      }
       const water = weather.snapshotWater(tick, options?.nestGrid);
       if (water.length) snap.waterGrids = water;
       const grids: NestGridSnapshot[] = [];

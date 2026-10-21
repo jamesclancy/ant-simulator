@@ -83,7 +83,7 @@ export function runSimWorker(scope: WorkerScope): void {
         last = now();
         pending = [];
         lastScentTick = -Infinity;
-        scope.postMessage({ type: 'ready', config: sim.config });
+        scope.postMessage({ type: 'ready', config: sim.config, tuning: sim.tuning });
         post();
         break;
       case 'commands':
@@ -149,7 +149,12 @@ export function runSimWorker(scope: WorkerScope): void {
         last = now();
         pending = [];
         lastScentTick = -Infinity;
-        scope.postMessage({ type: 'ready', config: sim.config, requestId: data.requestId });
+        scope.postMessage({
+          type: 'ready',
+          config: sim.config,
+          tuning: sim.tuning,
+          requestId: data.requestId,
+        });
         post();
         break;
       case 'setScentVision':

@@ -7,6 +7,11 @@ const MAX_ZOOM = 8;
 export class Camera {
   /** Disabled cameras ignore input (the hidden layer's camera while another is shown). */
   enabled = true;
+  /**
+   * One finger (or the left mouse button) drags the view. Off while a paint tool owns that
+   * gesture; two-finger pan/zoom, the wheel and mouse right/middle drag still work.
+   */
+  oneFingerPan = true;
   private pointers = new Map<number, { x: number; y: number }>();
   private pinchDist = 0;
 
@@ -72,6 +77,10 @@ export class Camera {
     if (!prev) return;
     const cur = this.local(e);
     if (this.pointers.size === 1) {
+      if (!this.oneFingerPan && !(e.pointerType === 'mouse' && e.buttons & 6)) {
+        this.pointers.set(e.pointerId, cur);
+        return;
+      }
       this.world.position.x += cur.x - prev.x;
       this.world.position.y += cur.y - prev.y;
       this.pointers.set(e.pointerId, cur);

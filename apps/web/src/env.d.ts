@@ -11,6 +11,13 @@ export interface AntDebugState {
   player: { x: number; y: number } | null;
   seed: number;
   tutorialActive: boolean;
+  sandbox: boolean;
+  /** A sandbox paint tool is armed (taps and drags paint). */
+  tool: boolean;
+  /** Sandbox rocks on the map. */
+  rocks: number;
+  /** Selected game speed step. */
+  speed: number;
 }
 
 declare global {

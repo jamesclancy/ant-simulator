@@ -104,6 +104,13 @@ export class SpiderManager {
     return id;
   }
 
+  /** Remove every spider (alive or dead) whose position is within `radius` of (x, y). */
+  removeNear(x: number, y: number, radius: number): number {
+    const before = this.spiders.length;
+    this.spiders = this.spiders.filter((s) => Math.hypot(s.x - x, s.y - y) > radius);
+    return before - this.spiders.length;
+  }
+
   info(): SpiderInfo[] {
     return this.spiders.map((s) => ({
       id: s.id,

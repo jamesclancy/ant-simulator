@@ -1,0 +1,190 @@
+#sandbox {
+  position: fixed;
+  right: calc(var(--sar) + 8px);
+  top: calc(var(--sat) + 76px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(236px, calc(100vw - 16px - var(--sar) - var(--sal)));
+  max-height: calc(100% - var(--sat) - var(--sab) - 150px);
+  color: #e8f0e8;
+  font-size: 13px;
+  pointer-events: none;
+}
+#sandbox[hidden] {
+  display: none;
+}
+#sandbox > * {
+  pointer-events: auto;
+}
+#sandbox-toggle {
+  align-self: flex-end;
+  min-height: 44px;
+  background: rgb(0 0 0 / 65%);
+  font-weight: 600;
+}
+#sandbox-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+  border-radius: 12px;
+  background: rgb(0 0 0 / 65%);
+}
+#sandbox-body[hidden] {
+  display: none;
+}
+.sandbox-tools,
+.sandbox-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.sandbox-tools button,
+.sandbox-actions button {
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 13px;
+}
+.sandbox-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sandbox-ants {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.sandbox-ants[hidden] {
+  display: none;
+}
+.sandbox-body select,
+#sandbox select {
+  min-height: 44px;
+  min-width: 0;
+  padding: 0 6px;
+  border: 1px solid #4b6b4b;
+  border-radius: 8px;
+  background: #121a12;
+  color: inherit;
+  font: inherit;
+}
+.sandbox-hint {
+  margin: 0;
+  opacity: 0.75;
+  font-size: 12px;
+}
+.sandbox-row {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 3.4em;
+  gap: 6px;
+  align-items: center;
+  min-height: 36px;
+}
+.sandbox-row[hidden] {
+  display: none;
+}
+.sandbox-row input[type='range'] {
+  min-width: 0;
+  accent-color: #7fb069;
+}
+.sandbox-row output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+#sandbox .sandbox-row {
+  grid-template-columns: auto 1fr 2.2em;
+}
+
+/* Parameter panel: a side card on wide screens, a bottom sheet on phones. */
+.sandbox-panel {
+  position: fixed;
+  right: calc(var(--sar) + 252px);
+  top: calc(var(--sat) + 76px);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  width: min(340px, calc(100vw - 16px));
+  max-height: calc(100% - var(--sat) - var(--sab) - 150px);
+  border-radius: 12px;
+  background: rgb(14 22 14 / 98%);
+  color: #e8f0e8;
+  font-size: 13px;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 45%);
+}
+.sandbox-panel[hidden] {
+  display: none;
+}
+.sandbox-panel header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 8px 8px 12px;
+  border-bottom: 1px solid rgb(255 255 255 / 12%);
+}
+.sandbox-panel h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 15px;
+}
+.sandbox-panel header .secondary {
+  background: #4a3b3b;
+  font-size: 12px;
+}
+.sandbox-scroll {
+  overflow-y: auto;
+  padding: 4px 12px 12px;
+  overscroll-behavior: contain;
+}
+.sandbox-section summary {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sandbox-note {
+  margin: 0 0 4px;
+  font-size: 11px;
+  opacity: 0.65;
+}
+.sandbox-panel .sandbox-row {
+  grid-template-columns: 1fr 1fr 3.8em;
+}
+.sandbox-check {
+  grid-template-columns: 1fr auto !important;
+}
+.sandbox-check input {
+  width: 24px;
+  height: 24px;
+  accent-color: #7fb069;
+}
+@media (max-width: 700px) {
+  /* The player bar wraps to two rows on phones: sit below it. */
+  #sandbox {
+    top: calc(var(--sat) + 134px);
+    max-height: calc(100% - var(--sat) - var(--sab) - 134px - 150px);
+  }
+  .sandbox-panel {
+    right: calc(var(--sar) + 8px);
+    left: calc(var(--sal) + 8px);
+    top: auto;
+    bottom: calc(var(--sab) + 84px);
+    width: auto;
+    max-height: 55%;
+  }
+}
+body.in-menu #sandbox,
+body.in-menu .sandbox-panel,
+body.menu-open #sandbox,
+body.menu-open .sandbox-panel {
+  display: none;
+}
+
+body.params-open #joystick {
+  display: none !important;
+}

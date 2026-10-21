@@ -14,6 +14,8 @@ import { STARVED_HP } from '../ants/store';
 import { createRng } from '../rng';
 import type { Rng } from '../rng';
 import type { Nest } from '../world/nest';
+import { slid } from '../world/obstacles';
+import type { ObstacleField } from '../world/obstacles';
 import { DigPlanner } from '../underground/digplan';
 import type { DigPlannerState } from '../underground/digplan';
 import { FlowField } from '../underground/flow';
@@ -227,13 +229,28 @@ export class Colony {
   }
 
   /** Surface ant whose job is underground: walk to the nest mouth and descend. */
-  walkToNest(ants: AntStore, i: number, rng: Rng, cfg: AntBehaviorConfig, tickRate: number): void {
+  walkToNest(
+    ants: AntStore,
+    i: number,
+    rng: Rng,
+    cfg: AntBehaviorConfig,
+    tickRate: number,
+    rocks: ObstacleField | null = null,
+  ): void {
     const dx = this.nest.x - ants.x[i]!;
     const dy = this.nest.y - ants.y[i]!;
     const h = Math.atan2(dy, dx) + (rng.next() * 2 - 1) * cfg.jitter;
     const v = cfg.speed / tickRate;
-    ants.x[i] = ants.x[i]! + Math.cos(h) * v;
-    ants.y[i] = ants.y[i]! + Math.sin(h) * v;
+    const x0 = ants.x[i]!;
+    const y0 = ants.y[i]!;
+    if (rocks) {
+      rocks.slide(x0, y0, x0 + Math.cos(h) * v, y0 + Math.sin(h) * v);
+      ants.x[i] = slid.x;
+      ants.y[i] = slid.y;
+    } else {
+      ants.x[i] = x0 + Math.cos(h) * v;
+      ants.y[i] = y0 + Math.sin(h) * v;
+    }
     ants.heading[i] = h;
     ants.state[i] = roleState(ants.role[i]!);
     if (this.nest.isAtNest(ants.x[i], ants.y[i])) this.enter(ants, i);

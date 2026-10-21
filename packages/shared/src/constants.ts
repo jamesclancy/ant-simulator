@@ -3,6 +3,7 @@ import type {
   AntlionConfig,
   ColonyConfig,
   CombatConfig,
+  PheromoneType,
   RainConfig,
   SpiderConfig,
 } from './types';
@@ -54,6 +55,8 @@ export const DEFAULT_COLONY_COUNT = 2;
 export const MAX_ANTS = 20000;
 
 export const SPEED_STEPS = [0.5, 1, 2, 4] as const;
+/** Sandbox games add 8x. */
+export const SANDBOX_SPEED_STEPS = [0.5, 1, 2, 4, 8] as const;
 
 /** Pheromone layers: field resolution (cells per edge) and snapshot cadence. */
 export const PHEROMONE_RESOLUTION = 256;
@@ -123,6 +126,16 @@ export const DEFAULT_COMBAT: Readonly<CombatConfig> = {
   patrolRadius: 360,
   scoutRadius: 220,
   threatRadius: 420,
+};
+
+/** Per-layer pheromone defaults: `evaporation` and `diffusion` per tick (see the sim's `PheromoneLayerConfig`). */
+export const DEFAULT_PHEROMONE_LAYERS: Readonly<
+  Record<PheromoneType, { evaporation: number; diffusion: number; max: number }>
+> = {
+  food: { evaporation: 0.006, diffusion: 0.08, max: 1 },
+  home: { evaporation: 0.01, diffusion: 0.05, max: 1 },
+  alarm: { evaporation: 0.01, diffusion: 0.4, max: 1 },
+  enemy: { evaporation: 0.01, diffusion: 0.1, max: 1 },
 };
 
 /** Spider defaults: roughly a 3-soldier / 12-worker mob to bring one down. */
