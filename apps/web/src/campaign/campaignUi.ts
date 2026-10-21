@@ -32,9 +32,7 @@ export class CampaignUi {
   private warnedFeet = false;
 
   constructor(private opts: CampaignUiOptions) {
-    this.hud.append(
-      h('div', { class: 'bar' }, this.progress, this.mapBtn, this.flightBtn),
-    );
+    this.hud.append(h('div', { class: 'bar' }, this.progress, this.mapBtn, this.flightBtn));
     document.body.append(this.hud);
     this.mapBtn.addEventListener('click', () => this.openMap());
     this.flightBtn.addEventListener('click', () => this.flight());
@@ -126,7 +124,7 @@ export class CampaignUi {
   }
 
   private onEvent(ev: Snapshot['events'][number], s: Snapshot): void {
-    const toast = this.opts.toast;
+    const toast = (text: string): void => this.opts.toast(text);
     switch (ev.type) {
       case 'matingFlight':
         if (ev.colony === PLAYER_COLONY) {
@@ -136,7 +134,9 @@ export class CampaignUi {
               : `Mating flight: ${ev.breeders} breeders flew, but no new colony took hold`,
           );
         } else if (ev.founded.length) {
-          toast(`Red queens founded ${ev.founded.length} new red ${ev.founded.length === 1 ? 'colony' : 'colonies'}`);
+          toast(
+            `Red queens founded ${ev.founded.length} new red ${ev.founded.length === 1 ? 'colony' : 'colonies'}`,
+          );
         }
         break;
       case 'colonyDestroyed':

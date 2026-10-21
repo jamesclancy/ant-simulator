@@ -18,6 +18,14 @@ export interface AntDebugState {
   rocks: number;
   /** Selected game speed step. */
   speed: number;
+  /** Campaign games: the detailed patch, patches owned, breeders ready, map open. */
+  campaign: {
+    active: number;
+    owned: number;
+    breeders: number;
+    mapOpen: boolean;
+    kind: 'yard' | 'room';
+  } | null;
   /** Audio engine probe: context state ('none' until the first gesture), active voices, music. */
   audio: {
     context: string;
