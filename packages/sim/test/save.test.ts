@@ -14,6 +14,7 @@ function scenario(): { sim: Sim; commands: Record<number, Command[]> } {
       { type: 'playerToggleTrail', on: true },
     ],
     20: [{ type: 'playerMoveTo', x: 700, y: 640 }],
+    40: [{ type: 'spawnSpider', x: 600, y: 520 }],
     50: [
       { type: 'spawnAnts', count: 30, x: mid, y: mid, colony: 0, caste: Caste.Soldier },
       { type: 'spawnAnts', count: 30, x: mid, y: mid + 10, colony: 1, caste: Caste.Soldier },
@@ -49,6 +50,8 @@ describe('save / restore', () => {
       snap.colonies[0]!.eggs + snap.colonies[0]!.larvae + snap.colonies[0]!.pupae,
     ).toBeGreaterThan(0);
     expect(snap.player?.recruitedIndices.length).toBeGreaterThan(0);
+
+    expect(snap.spiders).toHaveLength(2);
 
     const bytes = sim.serialize();
     const copy = restoreSim(bytes);

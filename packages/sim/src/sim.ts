@@ -320,7 +320,8 @@ export function createSim(partial: SimConfigInput = {}): Sim {
   };
 
   const modules: SimModule[] = [
-    // Add new stateful systems (predators, weather, ...) here.
+    { key: 'spiders', getState: () => spiders.getState(), setState: (st) => spiders.setState(st) },
+    // Add new stateful systems (weather, ...) here.
   ];
 
   const saveInfo = (): SaveInfo => ({

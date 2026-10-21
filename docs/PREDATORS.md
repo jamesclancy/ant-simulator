@@ -16,4 +16,4 @@
   player 0.5). The spider lays alarm in every colony's field while ants are near, pulling idle ants
   in. Non-soldiers within `fleeRadius` are pushed away unless the mob within `mobRadius` (worker 1,
   soldier 3) reaches `mobSize`, then they stand and fight. Soldiers never flee.
-- **Save/load**: `sim.spiders.getState()` / `setState()` are plain JSON data (all spider state).
+- **Save/load**: registered as the `spiders` module in `createSim` (`getState()` / `setState()` are plain JSON); the round-trip test in `save.test.ts` includes a spawned spider.
