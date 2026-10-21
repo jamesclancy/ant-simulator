@@ -60,3 +60,11 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+/* Phones: the player HUD wraps to two rows across the top; keep the panel below it. */
+@media (max-width: 600px) {
+  #colony-panel {
+    top: calc(var(--sat, 0px) + 148px);
+    max-height: calc(100dvh - var(--sat, 0px) - var(--sab, 0px) - 148px - 200px);
+  }
+}

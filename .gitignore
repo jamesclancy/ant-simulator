@@ -5,3 +5,6 @@ dist
 .claude/worktrees
 
 .vercel
+dist-e2e
+e2e/.results
+e2e/.report

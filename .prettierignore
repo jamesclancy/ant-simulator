@@ -5,3 +5,6 @@ docs/PLAN.md
 .claude
 apps/mobile/ios
 apps/mobile/android
+dist-e2e
+e2e/.results
+e2e/.report

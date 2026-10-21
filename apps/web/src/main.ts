@@ -23,6 +23,7 @@ import { Menu, type NewGameOptions } from './ui/menu';
 import { SettingsStore } from './ui/settings';
 import { bindDocumentSettings, createFpsMeter } from './ui/applySettings';
 import { TutorialPanel } from './ui/tutorialPanel';
+import { registerServiceWorker } from './pwa';
 
 const SURFACE_BACKGROUND = 0x1b2a1b;
 /** Underground ant tints (index = colony): light so they read against dark tunnels. */
@@ -672,6 +673,26 @@ async function main(): Promise<void> {
     if (changed.includes('tutorialSeen')) return;
   });
   fps.el.hidden = !settings.value.showFps;
+
+  // Test hook for the e2e suite: dev and `--mode e2e` builds only, never in production.
+  if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') {
+    window.__antDebug = {
+      state: () => ({
+        mode,
+        paused,
+        layer,
+        tick: latest?.tick ?? -1,
+        winner: latest?.winner ?? -1,
+        population: latest?.colonies.map((c) => c.population) ?? [],
+        player: latest?.player ? { x: latest.player.x, y: latest.player.y } : null,
+        seed: lastConfig.seed,
+        tutorialActive: tutorial.active,
+      }),
+      send: (commands) => sim.sendCommands(commands),
+    };
+  }
+
+  registerServiceWorker();
 
   if (params.has('play')) {
     startGame({

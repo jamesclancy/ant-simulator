@@ -13,14 +13,16 @@
     "test": "vitest run",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "typecheck": "tsc -p tsconfig.json && pnpm -r --parallel typecheck",
+    "typecheck": "tsc -p tsconfig.json && tsc -p e2e/tsconfig.json && pnpm -r --parallel typecheck",
     "mobile:sync": "pnpm build && pnpm --filter @ant/mobile exec cap sync",
     "mobile:ios": "pnpm mobile:sync && pnpm --filter @ant/mobile exec cap open ios",
     "mobile:android": "pnpm mobile:sync && pnpm --filter @ant/mobile exec cap open android",
+    "e2e": "playwright test",
     "bench": "pnpm --filter @ant/bench bench"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^26.6.5",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
