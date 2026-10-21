@@ -21,6 +21,7 @@ const FROZEN = {
 
 function arena(extra: SimConfigInput = {}) {
   return createSim({
+    spiders: 0,
     seed: 5,
     worldSize: 1024,
     initialAnts: 0,
@@ -43,7 +44,7 @@ const groundFood = (sim: ReturnType<typeof arena>) =>
 
 describe('two colonies', () => {
   it('places nests apart with point-symmetric food and spawns each colony at home', () => {
-    const sim = createSim({ seed: 9, initialAnts: 50 });
+    const sim = createSim({ spiders: 0, seed: 9, initialAnts: 50 });
     const [black, red] = sim.world.nests;
     const size = sim.config.worldSize;
     expect(Math.hypot(black!.x - red!.x, black!.y - red!.y)).toBeGreaterThan(size * 0.5);
@@ -66,7 +67,7 @@ describe('two colonies', () => {
 
   it('is deterministic with two colonies, combat and the AI director', () => {
     const go = () => {
-      const sim = createSim({ seed: 21, worldSize: 1024, initialAnts: 150 });
+      const sim = createSim({ spiders: 0, seed: 21, worldSize: 1024, initialAnts: 150 });
       const mid = 512;
       const cmds: Record<number, Command[]> = {
         50: [
@@ -265,6 +266,7 @@ describe('raids and game over', () => {
 describe('AI director', () => {
   it('raises the soldier share under threat and does not raid while threatened', () => {
     const sim = createSim({
+      spiders: 0,
       seed: 3,
       initialAnts: 100,
       foodSources: 0,
@@ -289,8 +291,8 @@ describe('AI director', () => {
   });
 
   it('is stronger on hard than on easy', () => {
-    const easy = createSim({ difficulty: 'easy' });
-    const hard = createSim({ difficulty: 'hard' });
+    const easy = createSim({ spiders: 0, difficulty: 'easy' });
+    const hard = createSim({ spiders: 0, difficulty: 'hard' });
     expect(hard.colonies[1]!.config.maxLayRate).toBeGreaterThan(
       easy.colonies[1]!.config.maxLayRate,
     );

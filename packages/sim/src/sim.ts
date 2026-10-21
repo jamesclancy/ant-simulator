@@ -12,6 +12,8 @@ import {
   DEFAULT_FOOD_SOURCES,
   DEFAULT_NEST_RADIUS,
   DEFAULT_SEED,
+  DEFAULT_SPIDER,
+  DEFAULT_SPIDER_COUNT,
   DEFAULT_WORLD_SIZE,
   MAX_ANTS,
   PHEROMONE_RESOLUTION,
@@ -35,6 +37,7 @@ import { Director, DIRECTOR_PROFILES } from './ai';
 import { Colony, takeCensus } from './colony';
 import { Combat } from './combat';
 import { PheromoneField } from './pheromones';
+import { SpiderManager } from './predators';
 import { PlayerController, isPlayerCommand } from './player';
 import { createRng } from './rng';
 import { createWorld } from './world';
@@ -102,6 +105,8 @@ export interface Sim {
   /** AI directors, one per non-player colony. */
   readonly directors: readonly Director[];
   readonly combat: Combat;
+  /** Surface predators. */
+  readonly spiders: SpiderManager;
   /** -1 while running; else the winning colony id, or -2 if none is left. */
   readonly winner: number;
   applyCommands(commands: readonly Command[]): void;
@@ -125,7 +130,7 @@ export interface Sim {
 }
 
 export function resolveConfig(partial: SimConfigInput = {}): SimConfig {
-  const { behavior, colony, combat, ...rest } = partial;
+  const { behavior, colony, combat, spider, ...rest } = partial;
   const merged = { ...DEFAULT_COMBAT, ...combat };
   return {
     seed: DEFAULT_SEED,
@@ -138,7 +143,13 @@ export function resolveConfig(partial: SimConfigInput = {}): SimConfig {
     foodSources: DEFAULT_FOOD_SOURCES,
     foodAmount: DEFAULT_FOOD_AMOUNT,
     nestRadius: DEFAULT_NEST_RADIUS,
+    spiders: DEFAULT_SPIDER_COUNT,
     ...rest,
+    spider: {
+      ...DEFAULT_SPIDER,
+      ...spider,
+      damage: [...(spider?.damage ?? DEFAULT_SPIDER.damage)] as [number, number, number],
+    },
     behavior: { ...DEFAULT_BEHAVIOR, ...behavior },
     colony: { ...DEFAULT_COLONY, ...colony },
     combat: { ...merged, hp: [...merged.hp], damage: [...merged.damage] },
@@ -204,6 +215,22 @@ export function createSim(partial: SimConfigInput = {}): Sim {
   const colony = colonies[0]!;
   const directors = colonies.slice(1).map((c) => new Director(c, colonies, config.difficulty));
   const combat = new Combat(config.worldSize, n, ants.capacity);
+  const spiders = new SpiderManager(config.spider, config.difficulty, config.worldSize);
+  {
+    // Lairs: seeded, away from the edges and well clear of every nest.
+    const lair = createRng(config.seed ^ 0x5b1d3a7);
+    const size = config.worldSize;
+    for (let s = 0; s < Math.max(0, Math.floor(config.spiders)); s++) {
+      let lx = size / 2;
+      let ly = size / 2;
+      for (let tries = 0; tries < 40; tries++) {
+        lx = lair.range(size * 0.1, size * 0.9);
+        ly = lair.range(size * 0.1, size * 0.9);
+        if (world.nests.every((nest) => Math.hypot(nest.x - lx, nest.y - ly) > size * 0.25)) break;
+      }
+      spiders.add(lx, ly);
+    }
+  }
   const remap = new Int32Array(ants.capacity);
   let tick = 0;
   let winner = -1;
@@ -293,7 +320,8 @@ export function createSim(partial: SimConfigInput = {}): Sim {
   };
 
   const modules: SimModule[] = [
-    // Add new stateful systems (predators, weather, ...) here.
+    { key: 'spiders', getState: () => spiders.getState(), setState: (st) => spiders.setState(st) },
+    // Add new stateful systems (weather, ...) here.
   ];
 
   const saveInfo = (): SaveInfo => ({
@@ -363,6 +391,7 @@ export function createSim(partial: SimConfigInput = {}): Sim {
     setState,
     saveInfo,
     serialize: () => encodeSave(getState(), saveInfo()),
+    spiders,
     applyCommands(commands) {
       for (const cmd of commands) {
         if (isPlayerCommand(cmd)) {
@@ -406,6 +435,9 @@ export function createSim(partial: SimConfigInput = {}): Sim {
           case 'setCasteRatio':
             colonies[cmd.colony ?? 0]?.setCasteRatio(cmd);
             break;
+          case 'spawnSpider':
+            spiders.add(clamp(cmd.x, 0, config.worldSize), clamp(cmd.y, 0, config.worldSize));
+            break;
           case 'setRaid': {
             const c = colonies[cmd.colony ?? 0];
             if (c) c.raid = cmd.on;
@@ -420,6 +452,19 @@ export function createSim(partial: SimConfigInput = {}): Sim {
       combat.resolve(ants, colonies, fields, combatCfg, behavior, tickRate, player.index);
       updateAnts(ants, fields, world, rng, behavior, combatCfg, tickRate, player.index, colonies);
       player.step();
+      if (spiders.count > 0) {
+        if (n < 2) combat.hash.build(ants); // resolve() only builds it for rival colonies
+        spiders.step({
+          ants,
+          hash: combat.hash,
+          world,
+          fields,
+          combat: combatCfg,
+          playerIndex: player.index,
+          antStep: behavior.speed / tickRate,
+          events,
+        });
+      }
       for (const c of colonies) c.step(ants, rng, behavior, tickRate);
       reap();
       for (const d of directors) d.update(tick);
@@ -459,6 +504,7 @@ export function createSim(partial: SimConfigInput = {}): Sim {
         events: drained,
         colonies: colonies.map((c) => c.snapshotColony()),
         winner,
+        spiders: spiders.info(),
       };
       const grids: NestGridSnapshot[] = [];
       for (const c of colonies) {

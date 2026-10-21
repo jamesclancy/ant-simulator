@@ -7,7 +7,12 @@ const WORKERS_ONLY = { worker: 1, soldier: 0, breeder: 0 };
 const base = { seed: 11, worldSize: 1024, foodSources: 0, colonies: 1 };
 
 function sim(initialAnts: number, colony: Partial<ColonyConfig> = {}) {
-  return createSim({ ...base, initialAnts, colony: { casteRatio: WORKERS_ONLY, ...colony } });
+  return createSim({
+    spiders: 0,
+    ...base,
+    initialAnts,
+    colony: { casteRatio: WORKERS_ONLY, ...colony },
+  });
 }
 
 function roles(s: ReturnType<typeof sim>): number[] {

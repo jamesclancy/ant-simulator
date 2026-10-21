@@ -40,6 +40,7 @@ export const NO_ECONOMY = {
 /** Seeded colony on a 1024 world with a single pile 316 units from the nest. */
 function forage(ticks: number, behavior: Partial<AntBehaviorConfig> = {}, seed = 1) {
   const sim = createSim({
+    spiders: 0,
     seed,
     worldSize: 1024,
     initialAnts: 400,
@@ -101,6 +102,7 @@ describe('foraging', () => {
 
   it('applies live behaviour tuning via setBehavior without touching defaults', () => {
     const sim = createSim({
+      spiders: 0,
       seed: 3,
       worldSize: 512,
       initialAnts: 50,

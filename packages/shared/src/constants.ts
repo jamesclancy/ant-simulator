@@ -1,4 +1,4 @@
-import type { AntBehaviorConfig, ColonyConfig, CombatConfig } from './types';
+import type { AntBehaviorConfig, ColonyConfig, CombatConfig, SpiderConfig } from './types';
 
 /** Fixed simulation rate. The renderer interpolates between ticks. */
 export const TICK_RATE_HZ = 20;
@@ -117,3 +117,26 @@ export const DEFAULT_COMBAT: Readonly<CombatConfig> = {
   scoutRadius: 220,
   threatRadius: 420,
 };
+
+/** Spider defaults: roughly a 3-soldier / 12-worker mob to bring one down. */
+export const DEFAULT_SPIDER: Readonly<SpiderConfig> = {
+  hp: 120,
+  huntSpeed: 1.3,
+  biteRange: 9,
+  eatTicks: 30,
+  contactRange: 14,
+  damage: [0.12, 0.4, 0.04],
+  senseRadius: 110,
+  leash: 600,
+  retreatFraction: 0.3,
+  regen: 0.05,
+  fleeRadius: 70,
+  mobRadius: 110,
+  mobSize: 8,
+  soldierMobWeight: 3,
+  alarmDeposit: 0.3,
+  foodDrop: 160,
+  respawnTicks: 2400,
+};
+
+export const DEFAULT_SPIDER_COUNT = 1;
