@@ -51,3 +51,12 @@ export async function startNewGame(
   await expect(page.locator('#menu')).toBeHidden();
   await expect.poll(async () => (await state(page)).mode).toBe('playing');
 }
+
+/** Main menu → Sandbox with a fixed seed and the default setup (two colonies, no hazards). */
+export async function startSandbox(page: Page, opts: { seed: string }): Promise<void> {
+  await page.getByRole('button', { name: 'Sandbox' }).click();
+  await page.getByLabel('Seed').fill(opts.seed);
+  await page.getByRole('button', { name: 'Start sandbox' }).click();
+  await expect(page.locator('#menu')).toBeHidden();
+  await expect.poll(async () => (await state(page)).sandbox).toBe(true);
+}

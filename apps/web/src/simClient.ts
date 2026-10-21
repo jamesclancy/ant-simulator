@@ -1,5 +1,6 @@
 import type {
   Command,
+  SandboxTuning,
   SaveInfo,
   SimConfig,
   SimConfigInput,
@@ -9,7 +10,7 @@ import type {
 } from '@ant/shared';
 
 export interface SimClientEvents {
-  onReady(config: SimConfig): void;
+  onReady(config: SimConfig, tuning?: SandboxTuning): void;
   onSnapshot(snapshot: Snapshot, speed: number, simMs?: number): void;
 }
 
@@ -37,7 +38,7 @@ export class SimClient {
       const msg = e.data;
       switch (msg.type) {
         case 'ready':
-          events.onReady(msg.config);
+          events.onReady(msg.config, msg.tuning);
           if (msg.requestId !== undefined) this.settle(msg.requestId, msg.config);
           break;
         case 'snapshot':

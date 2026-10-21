@@ -1,4 +1,4 @@
-import { PHEROMONE_RESOLUTION, PHEROMONE_TYPES } from '@ant/shared';
+import { DEFAULT_PHEROMONE_LAYERS, PHEROMONE_RESOLUTION, PHEROMONE_TYPES } from '@ant/shared';
 import type { PheromoneType } from '@ant/shared';
 
 /** Per-layer tuning. Rates are per tick (fixed 20Hz), not per second. */
@@ -14,12 +14,8 @@ export interface PheromoneLayerConfig {
   max: number;
 }
 
-export const DEFAULT_LAYER_CONFIG: Record<PheromoneType, PheromoneLayerConfig> = {
-  food: { evaporation: 0.006, diffusion: 0.08, max: 1 },
-  home: { evaporation: 0.01, diffusion: 0.05, max: 1 },
-  alarm: { evaporation: 0.01, diffusion: 0.4, max: 1 },
-  enemy: { evaporation: 0.01, diffusion: 0.1, max: 1 },
-};
+export const DEFAULT_LAYER_CONFIG: Record<PheromoneType, PheromoneLayerConfig> =
+  DEFAULT_PHEROMONE_LAYERS;
 
 export interface PheromoneFieldOptions {
   /** World edge length in world units. */

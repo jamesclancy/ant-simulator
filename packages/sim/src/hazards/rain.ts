@@ -122,6 +122,12 @@ export class Weather {
     this.warned = true;
   }
 
+  /** Let the current shower die away (it fades over `rampTicks`). */
+  stop(): void {
+    if (this.remaining > 0)
+      this.remaining = Math.min(this.remaining, Math.max(1, this.config.rampTicks));
+  }
+
   private nextGap(): number {
     const c = this.config;
     return Math.round(this.rng.range(c.minGap, c.maxGap) * this.gapScale);

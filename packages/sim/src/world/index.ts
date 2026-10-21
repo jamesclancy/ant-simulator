@@ -2,13 +2,18 @@ import type { SimConfig } from '@ant/shared';
 import type { Rng } from '../rng';
 import { FoodField } from './food';
 import { Nest } from './nest';
+import { ObstacleField } from './obstacles';
 
 export { FoodField, foodRadiusFor, MAX_FOOD_RADIUS, MIN_FOOD_RADIUS } from './food';
 export type { FoodSource } from './food';
 export { Nest } from './nest';
+export { ObstacleField, MIN_OBSTACLE_RADIUS, MAX_OBSTACLE_RADIUS, slid } from './obstacles';
+export type { Obstacle, ObstacleFieldState } from './obstacles';
 
 export interface World {
   food: FoodField;
+  /** Surface rocks (none unless placed in sandbox mode). */
+  obstacles: ObstacleField;
   /** One nest per colony (index = colony id). */
   nests: Nest[];
   /** The player colony's nest (`nests[0]`). */
@@ -61,6 +66,7 @@ export function createWorld(config: SimConfig, rng: Rng): World {
   }
   return {
     food,
+    obstacles: new ObstacleField(size),
     nests,
     get nest() {
       return nests[0]!;

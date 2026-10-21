@@ -65,6 +65,13 @@ export class AntlionManager {
     return id;
   }
 
+  /** Fill in every pit whose centre is within `radius` of (x, y). */
+  removeNear(x: number, y: number, radius: number): number {
+    const before = this.pits.length;
+    this.pits = this.pits.filter((p) => Math.hypot(p.x - x, p.y - y) > radius);
+    return before - this.pits.length;
+  }
+
   info(): AntlionInfo[] {
     return this.pits.map((p) => ({
       id: p.id,
