@@ -1,7 +1,8 @@
 import type { Texture } from 'pixi.js';
 import type { Atlas } from '../atlas';
 import { T } from '../palette';
-import { Px, hash2, lighten, darken } from '../pixels';
+import type { Px } from '../pixels';
+import { hash2, lighten, darken } from '../pixels';
 
 export const SPIDER_SIZE = 47;
 export const SPIDER_WALK_FRAMES = 4;

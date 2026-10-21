@@ -141,7 +141,7 @@ const PALETTES: Record<PaletteMode, Palette> = {
       food: rgbOf(0xff7a3d),
       home: rgbOf(0x33c8c8),
       alarm: rgbOf(0xffffff),
-      enemy: rgbOf(0xe040a0),
+      enemy: rgbOf(0x7a3ac8),
     },
     0xff9a5a,
   ),

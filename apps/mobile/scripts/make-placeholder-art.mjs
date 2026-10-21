@@ -1,10 +1,10 @@
 // Generates the app icon + splash sources in ../assets from the pixel ant mark (the same one the
-// PWA icons use, see apps/web/src/art/brand.mjs). Replace the PNGs in assets/ with final art
+// PWA icons use, see apps/web/scripts/brand.mjs). Replace the PNGs in assets/ with final art
 // (same names/sizes) and run `pnpm --filter @ant/mobile assets`.
 import sharp from 'sharp';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { COLORS, renderMark } from '../../web/src/art/brand.mjs';
+import { COLORS, renderMark } from '../../web/scripts/brand.mjs';
 
 const out = fileURLToPath(new URL('../assets/', import.meta.url));
 
@@ -12,7 +12,10 @@ const out = fileURLToPath(new URL('../assets/', import.meta.url));
 async function render(name, size, opts, flat = null) {
   const rgba = Buffer.from(renderMark(size, opts));
   let img = sharp(rgba, { raw: { width: size, height: size, channels: 4 } });
-  if (flat !== null) img = sharp({ create: { width: size, height: size, channels: 4, background: flat } }).composite([{ input: await img.png().toBuffer() }]);
+  if (flat !== null)
+    img = sharp({ create: { width: size, height: size, channels: 4, background: flat } }).composite(
+      [{ input: await img.png().toBuffer() }],
+    );
   await img.png().toFile(out + name);
 }
 

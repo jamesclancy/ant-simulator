@@ -14,7 +14,6 @@ import { AntLayer } from './antLayer';
 import { Art } from './art';
 import { bindPaletteCss } from './art/applyPalette';
 import { GroundLayer } from './art/ground';
-import { SURFACE_PX } from './art/sprites/world';
 import { Camera } from './camera';
 import { ScentOverlay } from './scentOverlay';
 import { WorldLayer } from './worldLayer';

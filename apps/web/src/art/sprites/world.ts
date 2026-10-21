@@ -1,7 +1,7 @@
 import type { Texture } from 'pixi.js';
 import type { Atlas } from '../atlas';
 import { T } from '../palette';
-import { Px, hash2, mix, darken, lighten } from '../pixels';
+import { hash2, mix, darken, lighten } from '../pixels';
 
 /** World units per art pixel on the surface. */
 export const SURFACE_PX = 2;
@@ -91,7 +91,7 @@ export function rockTexture(atlas: Atlas, r: number, variant: number): Texture {
       const lit = -(u * 0.65 + v * 0.75);
       const k = lit + (hash2(x, y, variant) - 0.5) * 0.35;
       const i = k > 0.55 ? 4 : k > 0.15 ? 3 : k > -0.3 ? 2 : k > -0.65 ? 1 : 0;
-      return T.rock[i]!;
+      return T.rock[i];
     });
     px.outline(0x23232a, true);
     // Cracks.
@@ -144,7 +144,7 @@ export function dirtHeapTexture(atlas: Atlas, level: number): Texture {
     const cy = h - 3;
     px.ellipse(cx, cy, r, r * 0.8, (x, y, u, v) => {
       const k = -(u * 0.5 + v * 0.8) + (hash2(x, y, level) - 0.5) * 0.4;
-      return T.dirt[k > 0.45 ? 4 : k > 0.05 ? 3 : k > -0.4 ? 2 : 1]!;
+      return T.dirt[k > 0.45 ? 4 : k > 0.05 ? 3 : k > -0.4 ? 2 : 1];
     });
     px.outline(T.dirt[0]);
   });

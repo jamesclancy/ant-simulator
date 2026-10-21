@@ -1,7 +1,8 @@
 import type { Texture } from 'pixi.js';
 import type { Atlas } from '../atlas';
 import { T, soilRamp } from '../palette';
-import { Px, hash2, lighten, darken, mix } from '../pixels';
+import type { Px } from '../pixels';
+import { hash2, lighten, darken, mix } from '../pixels';
 
 /** Nest tile art size in pixels; matches NEST_TILE so one art pixel is one world unit. */
 export const TILE = 12;
@@ -63,7 +64,10 @@ function openTile(px: Px, floor: number, rim: number, mask: number, seed: number
     }
   }
   // Packed-dirt rim wherever the neighbour is solid.
-  if (mask & N) (px.rect(0, 0, TILE, 2, rim), px.rect(0, 2, TILE, 1, mix(rim, floor, 0.5)));
+  if (mask & N) {
+    px.rect(0, 0, TILE, 2, rim);
+    px.rect(0, 2, TILE, 1, mix(rim, floor, 0.5));
+  }
   if (mask & S) px.rect(0, TILE - 1, TILE, 1, rim);
   if (mask & W) px.rect(0, 0, 1, TILE, rim);
   if (mask & E) px.rect(TILE - 1, 0, 1, TILE, rim);
@@ -99,7 +103,7 @@ export function registerNest(atlas: Atlas): NestTextures {
       for (let y = 0; y < TILE; y++) {
         for (let x = 0; x < TILE; x++) {
           const k = hash2(x, y, 40 + v) + (x + y < 8 ? 0.15 : 0) - (x + y > 15 ? 0.15 : 0);
-          px.set(x, y, T.rock[k > 0.75 ? 3 : k > 0.4 ? 2 : k > 0.2 ? 1 : 0]!);
+          px.set(x, y, T.rock[k > 0.75 ? 3 : k > 0.4 ? 2 : k > 0.2 ? 1 : 0]);
         }
       }
       px.rect(0, TILE - 1, TILE, 1, T.rock[0]);

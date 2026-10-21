@@ -1,6 +1,6 @@
 import { Sprite, Texture } from 'pixi.js';
 import type { Container } from 'pixi.js';
-import type { PheromoneSnapshot, PheromoneType } from '@ant/shared';
+import type { PheromoneSnapshot } from '@ant/shared';
 
 import type { Art } from './art';
 
@@ -53,7 +53,7 @@ export class ScentOverlay {
     const n = res * res;
     const layers = p.types.length;
     const scent = this.art.palette.scent;
-    const rgb = p.types.map((t) => scent[t as keyof typeof scent] ?? ([255, 255, 255] as const));
+    const rgb = p.types.map((t) => scent[t] ?? ([255, 255, 255] as const));
     for (let i = 0; i < n; i++) {
       let r = 0;
       let g = 0;

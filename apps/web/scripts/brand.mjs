@@ -53,7 +53,11 @@ export function markGrid({ ring = true, ink = null } = {}) {
   const tone = (v) => (ink ? ink : v < -0.4 ? COLORS.light : v > 0.45 ? COLORS.shade : body);
   // Legs and antennae first; the ant faces up.
   for (const s of [-1, 1]) {
-    for (const [y0, dy, dx] of [[12, -3, 7], [15, 0, 8], [18, 4, 7]]) {
+    for (const [y0, dy, dx] of [
+      [12, -3, 7],
+      [15, 0, 8],
+      [18, 4, 7],
+    ]) {
       line(16 + s * 2, y0, 16 + s * dx, y0 + dy - 1, COLORS.ink);
       line(16 + s * dx, y0 + dy - 1, 16 + s * (dx + 1), y0 + dy + 3, COLORS.ink);
     }

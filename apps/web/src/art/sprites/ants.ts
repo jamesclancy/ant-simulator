@@ -2,7 +2,8 @@ import type { Texture } from 'pixi.js';
 import type { Atlas } from '../atlas';
 import type { AntColors, Palette } from '../palette';
 import { T } from '../palette';
-import { Px, mix } from '../pixels';
+import type { Px } from '../pixels';
+import { mix } from '../pixels';
 
 /** Castes are indexed like `Caste` in @ant/shared: worker, soldier, breeder. */
 export const CASTE_COUNT = 3;
@@ -90,7 +91,8 @@ function drawAnt(px: Px, pal: Palette, pose: Pose): void {
   const abdomen = (x: number, y: number, u: number, v: number): number | null => {
     if (pointed && !(u > -0.3 || Math.abs(v) <= (u + 1) * 1.25)) return null;
     // Identity marks: colony 1 wears two pale bands, colony 0 a pale spot, the player a stripe.
-    if (pose.who === 1 && (Math.round(x - abX) === -1 || Math.round(x - abX) === 2)) return col.mark;
+    if (pose.who === 1 && (Math.round(x - abX) === -1 || Math.round(x - abX) === 2))
+      return col.mark;
     if (pose.who === 0 && Math.abs(u) < 0.34 && Math.abs(v) < 0.34) return col.mark;
     if (pose.who === 'p' && Math.abs(v) < 0.2) return col.mark;
     return tone(v);
@@ -111,8 +113,20 @@ function drawAnt(px: Px, pal: Palette, pose: Pose): void {
     return tone(v);
   });
   // Waists between the blobs.
-  px.rect(Math.round(abX + abRx - 0.5), cy, Math.max(1, Math.round(cx - thR - abX - abRx + 1.2)), 1, shade);
-  px.rect(Math.round(cx + thR - 0.5), cy, Math.max(1, Math.round(headX - headR - cx - thR + 1.2)), 1, shade);
+  px.rect(
+    Math.round(abX + abRx - 0.5),
+    cy,
+    Math.max(1, Math.round(cx - thR - abX - abRx + 1.2)),
+    1,
+    shade,
+  );
+  px.rect(
+    Math.round(cx + thR - 0.5),
+    cy,
+    Math.max(1, Math.round(headX - headR - cx - thR + 1.2)),
+    1,
+    shade,
+  );
   px.outline(ring, pal.highContrast);
 
   // Eyes.
@@ -198,7 +212,7 @@ export function registerAnts(atlas: Atlas): AntTextures {
         ANT_STATES.forEach((state, si) => {
           byState[si] = [];
           for (let frame = 0; frame < STATE_FRAMES[state]; frame++) {
-            byState[si]![frame] = atlas.define(
+            byState[si][frame] = atlas.define(
               key(set, who, caste, state, frame),
               size.w,
               size.h,
@@ -206,7 +220,7 @@ export function registerAnts(atlas: Atlas): AntTextures {
             );
           }
         });
-        frames[set][wi]![caste] = byState;
+        frames[set][wi][caste] = byState;
       }
     });
   }

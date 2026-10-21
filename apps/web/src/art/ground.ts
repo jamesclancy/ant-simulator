@@ -103,7 +103,7 @@ export class GroundLayer {
       const x = Math.round(rand() * worldSize);
       const y = Math.round(rand() * worldSize);
       if (!away(x, y)) continue;
-      const s = new Sprite(d.puddles[i % d.puddles.length]!);
+      const s = new Sprite(d.puddles[i % d.puddles.length]);
       s.anchor.set(0.5);
       s.scale.set(SURFACE_PX * (1 + Math.floor(rand() * 2)));
       s.position.set(x, y);

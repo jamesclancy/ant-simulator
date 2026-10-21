@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 const out = join(dirname(fileURLToPath(import.meta.url)), '../public/icons');
 mkdirSync(out, { recursive: true });
 
-import { renderMark } from '../src/art/brand.mjs';
+import { renderMark } from './brand.mjs';
 
 function crc32(buf) {
   let c;
@@ -33,7 +33,7 @@ function chunk(type, data) {
 function png(size, { scale, rounded }) {
   const mark = renderMark(size, { bg: true, scale });
   const raw = Buffer.alloc((size * 4 + 1) * size);
-  const radius = Math.round(size * 0.2 / 4) * 4;
+  const radius = Math.round((size * 0.2) / 4) * 4;
   for (let py = 0; py < size; py++) {
     raw[py * (size * 4 + 1)] = 0;
     for (let px = 0; px < size; px++) {
