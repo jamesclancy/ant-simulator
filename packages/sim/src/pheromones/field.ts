@@ -42,6 +42,12 @@ export interface PheromoneFieldOptions {
 /** With evaporation on, values below this are snapped to 0 so trails fully disappear. */
 const EPSILON = 1e-4;
 
+export interface PheromoneFieldState {
+  updates: number;
+  /** One entry per `PHEROMONE_TYPES` slot; null where the type is not allocated. */
+  layers: (Float32Array | null)[];
+}
+
 function rowEmpty(d: Float32Array, start: number, len: number): boolean {
   for (let i = start, end = start + len; i < end; i++) if (d[i] !== 0) return false;
   return true;
@@ -215,6 +221,21 @@ export class PheromoneField {
         d[mid + x] = v < eps ? 0 : v;
       }
     }
+  }
+
+  /** Exact copy of every layer plus the half-rate phase counter. */
+  getState(): PheromoneFieldState {
+    return { updates: this.updates, layers: this.data.map((d) => d?.slice() ?? null) };
+  }
+
+  setState(s: PheromoneFieldState): void {
+    if (s.layers.length !== this.data.length) throw new Error('pheromone layer count mismatch');
+    s.layers.forEach((l, t) => {
+      const d = this.data[t];
+      if (!d !== !l) throw new Error('pheromone layer set mismatch');
+      if (d && l) d.set(l);
+    });
+    this.updates = s.updates;
   }
 
   /** Zeroes one layer, or all layers when `type` is omitted. */

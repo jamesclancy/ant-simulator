@@ -1,0 +1,38 @@
+#save-menu {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--sab) + 84px);
+  transform: translateX(-50%);
+  z-index: 20;
+  width: min(420px, calc(100vw - 24px));
+  padding: 8px;
+  border-radius: 12px;
+  background: rgb(0 0 0 / 80%);
+  color: #e8f0e8;
+  font-size: 14px;
+}
+#save-menu[hidden] {
+  display: none;
+}
+.save-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 0;
+}
+.save-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.save-label span {
+  font-size: 12px;
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.save-row button:disabled {
+  opacity: 0.4;
+}

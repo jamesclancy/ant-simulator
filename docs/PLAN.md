@@ -160,7 +160,7 @@ You are one ant (the "player ant") in a black ant colony fighting a red colony f
 - [x] Red colony with AI director (see [COMBAT.md](COMBAT.md))
 - [x] Combat, alarm pheromone, nest raids, queen death = loss/win
 - [ ] Spider predator
-- [ ] Save/load (snapshot to IndexedDB)
+- [x] Save/load (versioned snapshot; IndexedDB on web, Filesystem on native; see docs/SAVE.md)
 - [ ] Main menu, settings, tutorial prompts
 - [ ] **Release: web PWA (itch.io / own domain)**
 

@@ -8,6 +8,11 @@ export interface FoodSource {
   amount: number;
 }
 
+export interface FoodFieldState {
+  nextId: number;
+  sources: FoodSource[];
+}
+
 /** Largest radius a pile can have; bounds the grid search margin. */
 export const MAX_FOOD_RADIUS = 40;
 export const MIN_FOOD_RADIUS = 6;
@@ -118,6 +123,21 @@ export class FoodField {
     s.amount -= taken;
     if (s.amount <= 0) this.remove(id);
     return taken;
+  }
+
+  getState(): FoodFieldState {
+    return { nextId: this.nextId, sources: [...this.sources.values()].map((s) => ({ ...s })) };
+  }
+
+  /** Rebuilds the id map and grid buckets; piles keep their creation order (= id order). */
+  setState(s: FoodFieldState): void {
+    this.sources.clear();
+    for (const b of this.cells) b.length = 0;
+    for (const src of s.sources) {
+      this.sources.set(src.id, { ...src });
+      this.cells[this.cellIndex(src.x, src.y)]!.push(src.id);
+    }
+    this.nextId = s.nextId;
   }
 
   private cellIndex(x: number, y: number): number {

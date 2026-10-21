@@ -67,6 +67,12 @@ export interface DirectorState {
   raid: boolean;
 }
 
+export interface DirectorSaveState {
+  lastLosses: number;
+  threatAvg: number;
+  state: DirectorState | null;
+}
+
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 /**
@@ -97,6 +103,24 @@ export class Director {
     difficulty: Difficulty,
   ) {
     this.profile = DIRECTOR_PROFILES[difficulty];
+  }
+
+  getState(): DirectorSaveState {
+    return {
+      lastLosses: this.lastLosses,
+      threatAvg: this.threatAvg,
+      state: this.state && {
+        ...this.state,
+        caste: { ...this.state.caste },
+        behavior: { ...this.state.behavior },
+      },
+    };
+  }
+
+  setState(s: DirectorSaveState): void {
+    this.lastLosses = s.lastLosses;
+    this.threatAvg = s.threatAvg;
+    this.state = s.state;
   }
 
   update(tick: number): void {

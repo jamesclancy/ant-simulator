@@ -2,6 +2,11 @@ import type { NestGrid } from './grid';
 
 export const UNREACHABLE = 0xffff;
 
+export interface FlowFieldState {
+  dist: Uint16Array;
+  dirty: boolean;
+}
+
 /**
  * Walking-distance field over a nest grid: BFS (4-neighbour) over open tiles from a set
  * of goal tiles. An ant steers to its lowest-distance neighbour, so any number of ants
@@ -16,6 +21,15 @@ export class FlowField {
   constructor(private grid: NestGrid) {
     this.dist = new Uint16Array(grid.size);
     this.queue = new Int32Array(grid.size);
+  }
+
+  getState(): FlowFieldState {
+    return { dist: this.dist.slice(), dirty: this.dirty };
+  }
+
+  setState(s: FlowFieldState): void {
+    this.dist.set(s.dist);
+    this.dirty = s.dirty;
   }
 
   /** Rebuild from `goals` (flat tile indices; non-open goals are ignored). */

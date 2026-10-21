@@ -38,10 +38,50 @@ import { PheromoneField } from './pheromones';
 import { PlayerController, isPlayerCommand } from './player';
 import { createRng } from './rng';
 import { createWorld } from './world';
+import { SAVE_VERSION, decodeSave, encodeSave } from './save/format';
+import type { SaveInfo } from './save/format';
+import { getAntsState, setAntsState } from './ants/store';
+import type { AntsState } from './ants/store';
+import type { PheromoneFieldState } from './pheromones/field';
+import type { FoodFieldState } from './world/food';
+import type { ColonyState } from './colony/colony';
+import type { DirectorSaveState } from './ai/director';
+import type { PlayerState } from './player';
 import type { World } from './world';
 
 /** Corpse food within this distance of an existing pile is merged into it. */
 const CORPSE_MERGE_RADIUS = 14;
+
+/**
+ * A part of the sim that owns state which must survive a save. Register one in `createSim`'s
+ * `modules` list with a unique `key`; `getState` returns plain data (numbers, strings,
+ * booleans, arrays, objects and typed arrays: no classes, Maps, undefined or functions) and
+ * `setState` receives the same shape back on a freshly built sim. Saves written before a
+ * module existed simply have no entry for its key, so `setState` is not called (the module
+ * keeps its fresh-game state); bump `SAVE_VERSION` only when changing an existing shape.
+ */
+export interface SimModule {
+  key: string;
+  getState(): unknown;
+  setState(state: never): void;
+}
+
+/** The sim's full state tree: what `serialize` writes and `restoreSim` reads. */
+export interface SimState {
+  config: SimConfig;
+  tick: number;
+  winner: number;
+  rng: number;
+  events: SimEvent[];
+  ants: AntsState;
+  fields: PheromoneFieldState[];
+  food: FoodFieldState;
+  colonies: ColonyState[];
+  directors: DirectorSaveState[];
+  player: PlayerState;
+  /** `SimModule` states by key. */
+  modules: Record<string, unknown>;
+}
 
 export interface Sim {
   readonly config: SimConfig;
@@ -65,6 +105,14 @@ export interface Sim {
   /** -1 while running; else the winning colony id, or -2 if none is left. */
   readonly winner: number;
   applyCommands(commands: readonly Command[]): void;
+  /** Complete, exact state (see `SimModule`). Typed arrays are copies. */
+  getState(): SimState;
+  /** Load a state from `getState` into a sim created with the same config. */
+  setState(state: SimState): void;
+  /** `getState` as a versioned, compressed binary save (`save/format.ts`). */
+  serialize(): Uint8Array;
+  /** Header summary of the current state, as stored in a save. */
+  saveInfo(): SaveInfo;
   /** Advance exactly one fixed tick. */
   step(): void;
   /**
@@ -244,6 +292,56 @@ export function createSim(partial: SimConfigInput = {}): Sim {
     events.push({ type: 'gameOver', winner });
   };
 
+  const modules: SimModule[] = [
+    // Add new stateful systems (predators, weather, ...) here.
+  ];
+
+  const saveInfo = (): SaveInfo => ({
+    version: SAVE_VERSION,
+    tick,
+    seed: config.seed,
+    winner,
+    populations: colonies.map((c) => c.population),
+    queensAlive: colonies.map((c) => c.queenAlive),
+  });
+  const getState = (): SimState => ({
+    config: { ...config, behavior: { ...config.behavior } },
+    tick,
+    winner,
+    rng: rng.getState(),
+    events: events.map((e) => ({ ...e })),
+    ants: getAntsState(ants),
+    fields: fields.map((f) => f.getState()),
+    food: world.food.getState(),
+    colonies: colonies.map((c) => c.getState()),
+    directors: directors.map((d) => d.getState()),
+    player: player.getState(),
+    modules: Object.fromEntries(modules.map((m) => [m.key, m.getState()])),
+  });
+  const setState = (s: SimState): void => {
+    if (
+      s.colonies.length !== n ||
+      s.fields.length !== n ||
+      s.directors.length !== directors.length
+    ) {
+      throw new Error('save does not match this sim (colony count)');
+    }
+    tick = s.tick;
+    winner = s.winner;
+    rng.setState(s.rng);
+    events = s.events.map((e) => ({ ...e }));
+    setAntsState(ants, s.ants);
+    fields.forEach((f, i) => f.setState(s.fields[i]!));
+    world.food.setState(s.food);
+    colonies.forEach((c, i) => c.setState(s.colonies[i]!));
+    directors.forEach((d, i) => d.setState(s.directors[i]!));
+    player.setState(s.player);
+    for (const m of modules) {
+      if (m.key in s.modules) m.setState(s.modules[m.key] as never);
+    }
+    Object.assign(config.behavior, s.config.behavior);
+  };
+
   return {
     config,
     get tick() {
@@ -261,6 +359,10 @@ export function createSim(partial: SimConfigInput = {}): Sim {
     colony,
     directors,
     combat,
+    getState,
+    setState,
+    saveInfo,
+    serialize: () => encodeSave(getState(), saveInfo()),
     applyCommands(commands) {
       for (const cmd of commands) {
         if (isPlayerCommand(cmd)) {
@@ -379,4 +481,16 @@ export function createSim(partial: SimConfigInput = {}): Sim {
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
+}
+
+/**
+ * Rebuild a sim from `Sim.serialize` bytes. Throws `SaveError` for foreign, damaged or
+ * newer-format files. The world is regenerated from the saved config (cheap), then every
+ * module's state is overwritten, so stepping it matches the original tick for tick.
+ */
+export function restoreSim(bytes: Uint8Array): Sim {
+  const state = decodeSave(bytes) as unknown as SimState;
+  const sim = createSim(state.config);
+  sim.setState(state);
+  return sim;
 }

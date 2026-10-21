@@ -1,7 +1,8 @@
 import { PHEROMONE_SNAPSHOT_INTERVAL } from '@ant/shared';
 import type { WorkerInMessage, WorkerOutMessage } from '@ant/shared';
 import type { Command } from '@ant/shared';
-import { createSim } from './sim';
+import { createSim, restoreSim } from './sim';
+import { SaveError } from './save/format';
 import type { Sim } from './sim';
 
 /** Minimal slice of the worker global scope, so this package needs no DOM/WebWorker lib. */
@@ -99,6 +100,55 @@ export function runSimWorker(scope: WorkerScope): void {
         break;
       case 'setSpeed':
         speed = data.speed;
+        break;
+      case 'save':
+        if (!sim) {
+          scope.postMessage({
+            type: 'error',
+            requestId: data.requestId,
+            operation: 'save',
+            code: 'failed',
+            message: 'no game is running',
+          });
+          break;
+        }
+        try {
+          const bytes = sim.serialize();
+          scope.postMessage(
+            { type: 'saved', requestId: data.requestId, bytes, info: sim.saveInfo() },
+            [bytes.buffer],
+          );
+        } catch (e) {
+          scope.postMessage({
+            type: 'error',
+            requestId: data.requestId,
+            operation: 'save',
+            code: 'failed',
+            message: e instanceof Error ? e.message : String(e),
+          });
+        }
+        break;
+      case 'load':
+        try {
+          sim = restoreSim(data.bytes);
+        } catch (e) {
+          // The running game (if any) is untouched.
+          scope.postMessage({
+            type: 'error',
+            requestId: data.requestId,
+            operation: 'load',
+            code: e instanceof SaveError ? e.code : 'failed',
+            message: e instanceof Error ? e.message : String(e),
+          });
+          break;
+        }
+        paused = false;
+        acc = 0;
+        last = now();
+        pending = [];
+        lastScentTick = -Infinity;
+        scope.postMessage({ type: 'ready', config: sim.config, requestId: data.requestId });
+        post();
         break;
       case 'setScentVision':
         scentVision = data.enabled;
