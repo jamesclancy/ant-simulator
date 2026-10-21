@@ -6,7 +6,7 @@ const ci = !!process.env.CI;
 export default defineConfig({
   testDir: 'e2e',
   outputDir: 'e2e/.results',
-  timeout: 90_000,
+  timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: true,
   forbidOnly: ci,
@@ -15,6 +15,9 @@ export default defineConfig({
   reporter: ci ? [['github'], ['html', { open: 'never', outputFolder: 'e2e/.report' }]] : 'list',
   use: {
     baseURL: `http://localhost:${PORT}`,
+    // Only the PWA spec opts back in: a worker precaching and claiming clients mid-game made
+    // the other specs depend on its install timing.
+    serviceWorkers: 'block',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

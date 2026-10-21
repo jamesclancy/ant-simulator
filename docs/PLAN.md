@@ -138,41 +138,41 @@ You are one ant (the "player ant") in a black ant colony fighting a red colony f
 ## 6. Milestones
 
 ### Phase 0 — Foundations (≈1 week)
-- [ ] pnpm monorepo, TS strict, ESLint/Prettier, Vitest, GitHub Actions CI
-- [ ] Vite web app with a Pixi canvas, camera pan/zoom (mouse + touch)
-- [ ] Sim worker skeleton: fixed tick, seeded RNG, command/snapshot messaging
-- [ ] Renderer interpolates between snapshots
+- [x] pnpm monorepo, TS strict, ESLint/Prettier, Vitest, GitHub Actions CI
+- [x] Vite web app with a Pixi canvas, camera pan/zoom (mouse + touch)
+- [x] Sim worker skeleton: fixed tick, seeded RNG, command/snapshot messaging
+- [x] Renderer interpolates between snapshots
 
 ### Phase 1 — Ant swarm prototype (≈2 weeks)
-- [ ] SoA ant storage, wander + steering
-- [ ] Pheromone grids (deposit/diffuse/evaporate) + scent overlay
-- [ ] Food sources, foraging loop (find → carry → trail → home)
-- [ ] Benchmark: 5k ants at a stable tick time on desktop and on a real phone
+- [x] SoA ant storage, wander + steering
+- [x] Pheromone grids (deposit/diffuse/evaporate) + scent overlay
+- [x] Food sources, foraging loop (find → carry → trail → home)
+- [ ] Benchmark: 5k ants at a stable tick time on desktop and on a real phone — _desktop done (`pnpm bench`, run in CI); the real-phone run is pending (user), see RELEASE.md_
 - **Exit criterion:** emergent foraging trails form on their own, and the game feels alive.
 
 ### Phase 2 — Playable colony (≈3 weeks)
-- [ ] Player ant: direct control, carry, lay trail, recruit
-- [ ] Underground layer: dig, chambers, queen, brood lifecycle
-- [ ] Colony economy + caste/behavior sliders
-- [ ] Basic HUD (food, population, health), pause/speed controls
+- [x] Player ant: direct control, carry, lay trail, recruit
+- [x] Underground layer: dig, chambers, queen, brood lifecycle
+- [x] Colony economy + caste/behavior sliders
+- [x] Basic HUD (food, population, health), pause/speed controls
 
 ### Phase 3 — Conflict = MVP "Quick Game" (≈3 weeks)
 - [x] Red colony with AI director (see [COMBAT.md](COMBAT.md))
 - [x] Combat, alarm pheromone, nest raids, queen death = loss/win
 - [x] Spider predator (see [PREDATORS.md](PREDATORS.md))
 - [x] Save/load (versioned snapshot; IndexedDB on web, Filesystem on native; see docs/SAVE.md)
-- [ ] Main menu, settings, tutorial prompts
-- [ ] **Release: web PWA (itch.io / own domain)**
+- [x] Main menu, settings, tutorial prompts
+- [ ] **Release: web PWA (itch.io / own domain)** — _installable offline PWA is built and e2e-tested; picking a host and publishing is pending (user)_
 
 ### Phase 4 — Mobile ship (≈2 weeks)
-- [ ] Capacitor iOS + Android builds, icons, splash screen
-- [ ] Touch UX polish, haptics, performance tuning on low-end Android
-- [ ] Battery/thermal: lower the tick rate in the background and pause on app blur
-- [ ] TestFlight / Play internal testing → store submission
+- [x] Capacitor iOS + Android builds, icons, splash screen _(projects and generated placeholder art are in the repo; iOS needs a full-Xcode build and a final-art swap, see RELEASE.md)_
+- [x] Touch UX polish, haptics, performance tuning on low-end Android _(adaptive perf governor is done; on-device tuning is pending a real phone)_
+- [x] Battery/thermal: lower the tick rate in the background and pause on app blur _(implemented as pause + autosave on blur; the tick rate is not lowered)_
+- [ ] TestFlight / Play internal testing → store submission — _pending (user): developer accounts, signing, listings; checklist in RELEASE.md_
 
 ### Phase 5 — Content & depth (ongoing)
 - [ ] Sandbox mode
-- [x] Hazards: rain/flooding, antlion (footsteps/lawnmower still to do)
+- [x] Hazards: rain/flooding, antlion (footsteps/lawnmower still to do, not started)
 - [ ] Campaign: yard grid, breeder flights to found new colonies, house interior
 - [ ] Audio + music, art pass, accessibility (colorblind-safe red/black alternatives)
 - [ ] Optional: replays from the command log, daily-seed challenges

@@ -25,9 +25,15 @@ export async function waitForTick(page: Page, atLeast: number): Promise<AntDebug
   return state(page);
 }
 
-/** Open the page at the main menu and wait for the sim backdrop to be running. */
+/**
+ * Open the page at the main menu and wait for the sim backdrop to be running. The device tier is
+ * pinned to `low`: it keeps rendering cheap on the shared CI runners (a saturated renderer starved
+ * Playwright's own page commands) and stops the perf governor re-profiling mid-test.
+ */
 export async function openMenu(page: Page, query = ''): Promise<void> {
-  await page.goto(`/${query}`);
+  const params = new URLSearchParams(query);
+  params.set('tier', 'low');
+  await page.goto(`/?${params}`);
   await expect(page.getByRole('heading', { name: 'Ant Simulator' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => !!window.__antDebug)).toBe(true);
 }
