@@ -52,7 +52,13 @@ export interface Palette {
   highContrast: boolean;
 }
 
-function ramp(body: number, outline: number, nestOutline: number, mark: number, accent: number): AntColors {
+function ramp(
+  body: number,
+  outline: number,
+  nestOutline: number,
+  mark: number,
+  accent: number,
+): AntColors {
   return {
     body,
     light: lighten(body, 0.32),
@@ -178,7 +184,13 @@ export const T = {
   spider: [0x140c18, 0x2a1a2e, 0x4b2f55, 0x7a4f88],
   spiderEye: 0xff4040,
   jaw: 0x2b1d10,
-  brood: { egg: 0xf4f0e0, larva: 0xe8d9a8, larvaShade: 0xb89c5a, pupa: 0xa8752c, pupaShade: 0x73501c },
+  brood: {
+    egg: 0xf4f0e0,
+    larva: 0xe8d9a8,
+    larvaShade: 0xb89c5a,
+    pupa: 0xa8752c,
+    pupaShade: 0x73501c,
+  },
   chamber: { queen: 0x4a2c28, food: 0x4a4018, nursery: 0x2e3a4a },
   white: 0xffffff,
   black: 0x000000,

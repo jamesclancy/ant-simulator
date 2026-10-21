@@ -90,7 +90,8 @@ function drawAnt(px: Px, pal: Palette, pose: Pose): void {
   const abdomen = (x: number, y: number, u: number, v: number): number | null => {
     if (pointed && !(u > -0.3 || Math.abs(v) <= (u + 1) * 1.25)) return null;
     // Identity marks: colony 1 wears two pale bands, colony 0 a pale spot, the player a stripe.
-    if (pose.who === 1 && (Math.round(x - abX) === -1 || Math.round(x - abX) === 2)) return col.mark;
+    if (pose.who === 1 && (Math.round(x - abX) === -1 || Math.round(x - abX) === 2))
+      return col.mark;
     if (pose.who === 0 && Math.abs(u) < 0.34 && Math.abs(v) < 0.34) return col.mark;
     if (pose.who === 'p' && Math.abs(v) < 0.2) return col.mark;
     return tone(v);

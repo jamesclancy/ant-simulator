@@ -49,7 +49,13 @@ export function foodTexture(atlas: Atlas, kind: FoodKind, r: number, variant: nu
     } else {
       // Husk of a beetle: domed shell with a centre seam, legs curled up.
       px.ellipse(c, c, r * 0.8, r * 0.95, (_x, _y, u, v) =>
-        Math.abs(u) < 0.12 ? T.corpse[0] : v < -0.35 ? T.corpse[3] : v > 0.45 ? T.corpse[0] : T.corpse[2],
+        Math.abs(u) < 0.12
+          ? T.corpse[0]
+          : v < -0.35
+            ? T.corpse[3]
+            : v > 0.45
+              ? T.corpse[0]
+              : T.corpse[2],
       );
       px.ellipse(c, c - r * 0.85, r * 0.35, r * 0.3, T.corpse[1]);
       px.outline(0x1c120a);
@@ -96,17 +102,18 @@ export function rockTexture(atlas: Atlas, r: number, variant: number): Texture {
 }
 
 /** Nest entrance: a ring of packed dirt around a dark hole, `r` art pixels across the mound. */
-export function moundTexture(
-  atlas: Atlas,
-  colony: number,
-  r: number,
-  hole: number,
-): Texture {
+export function moundTexture(atlas: Atlas, colony: number, r: number, hole: number): Texture {
   const size = r * 2 + 4;
   return atlas.define(`mound/${colony}/${r}/${hole}`, size, size, (px) => {
     const c = r + 2;
     const tint = colony === 1 ? 0xb4604a : 0x8a6238;
-    const ramp = [darken(tint, 0.5), darken(tint, 0.25), tint, lighten(tint, 0.2), lighten(tint, 0.38)];
+    const ramp = [
+      darken(tint, 0.5),
+      darken(tint, 0.25),
+      tint,
+      lighten(tint, 0.2),
+      lighten(tint, 0.38),
+    ];
     px.ellipse(c, c, r, r * 0.92, (x, y, u, v) => {
       const lit = -(u * 0.5 + v * 0.7);
       const k = lit + (hash2(x, y, colony) - 0.5) * 0.4;
@@ -194,7 +201,11 @@ export function registerDecor(atlas: Atlas): DecorTextures {
   for (let i = 0; i < CLOVERS; i++) {
     clover.push(
       atlas.define(`decor/clover/${i}`, 7, 7, (px) => {
-        for (const [x, y] of [[2, 2], [4, 2], [3, 4]] as const) {
+        for (const [x, y] of [
+          [2, 2],
+          [4, 2],
+          [3, 4],
+        ] as const) {
           px.rect(x - 1, y - 1, 2, 2, T.grass[4]);
           px.set(x - 1, y - 1, lighten(T.grass[4], 0.3));
         }

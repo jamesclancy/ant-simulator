@@ -1,7 +1,18 @@
 import type { Container } from 'pixi.js';
 
-const MIN_ZOOM = 0.1;
+const MIN_ZOOM = 0.125;
 const MAX_ZOOM = 8;
+/** Zoom stops: at these levels every art pixel covers a whole (or half) number of screen pixels. */
+export const ZOOM_STEPS = [0.125, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8] as const;
+/** Wheel distance (px) per zoom step. */
+const WHEEL_STEP = 50;
+
+const nearestStep = (z: number): number => {
+  let best: number = ZOOM_STEPS[0];
+  for (const s of ZOOM_STEPS)
+    if (Math.abs(Math.log(s / z)) < Math.abs(Math.log(best / z))) best = s;
+  return best;
+};
 
 /** Pan/zoom controller for a world container: wheel, mouse drag, one-finger drag, pinch. */
 export class Camera {
@@ -14,6 +25,10 @@ export class Camera {
   oneFingerPan = true;
   private pointers = new Map<number, { x: number; y: number }>();
   private pinchDist = 0;
+  private wheelAcc = 0;
+  private pinchMid = { x: 0, y: 0 };
+  /** Device pixel ratio used to keep the view on whole device pixels. */
+  pixelRatio = 1;
 
   constructor(
     private world: Container,
@@ -61,8 +76,23 @@ export class Camera {
     if (!this.enabled) return;
     e.preventDefault();
     const r = this.el.getBoundingClientRect();
-    this.zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015));
+    this.wheelAcc += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    const steps = Math.trunc(this.wheelAcc / WHEEL_STEP);
+    if (steps === 0) return;
+    this.wheelAcc -= steps * WHEEL_STEP;
+    let i = ZOOM_STEPS.indexOf(nearestStep(this.world.scale.x) as (typeof ZOOM_STEPS)[number]);
+    i = Math.max(
+      0,
+      Math.min(ZOOM_STEPS.length - 1, i - Math.sign(steps) * Math.min(2, Math.abs(steps))),
+    );
+    this.zoomAt(e.clientX - r.left, e.clientY - r.top, ZOOM_STEPS[i]! / this.world.scale.x);
   };
+
+  /** Keep the world on whole device pixels so nearest-neighbour art never shimmers. Call each frame. */
+  snapToPixels(): void {
+    const k = this.pixelRatio;
+    this.world.position.set(Math.round(this.world.x * k) / k, Math.round(this.world.y * k) / k);
+  }
 
   private onDown = (e: PointerEvent): void => {
     if (!this.enabled) return;
@@ -102,11 +132,21 @@ export class Camera {
       if (this.pinchDist > 0 && dist > 0)
         this.zoomAt(midAfter.x, midAfter.y, dist / this.pinchDist);
       this.pinchDist = dist;
+      this.pinchMid = midAfter;
     }
   };
 
   private onUp = (e: PointerEvent): void => {
+    const wasPinch = this.pointers.size === 2;
     this.pointers.delete(e.pointerId);
+    // Pinch is continuous while the fingers are down, then settles on the nearest zoom stop.
+    if (wasPinch) {
+      this.zoomAt(
+        this.pinchMid.x,
+        this.pinchMid.y,
+        nearestStep(this.world.scale.x) / this.world.scale.x,
+      );
+    }
     if (this.pointers.size === 2) this.pinchDist = this.pinchDistance();
   };
 

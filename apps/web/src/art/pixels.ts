@@ -3,7 +3,8 @@ export const CLEAR = -1;
 
 /** Deterministic hash in [0, 1) for tile/decor variation (no RNG state to carry around). */
 export function hash2(x: number, y: number, salt = 0): number {
-  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(salt | 0, 2147483647);
+  let h =
+    Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(salt | 0, 2147483647);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
@@ -19,7 +20,11 @@ export function rng(seed: number): () => number {
   };
 }
 
-export const rgb = (c: number): [number, number, number] => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+export const rgb = (c: number): [number, number, number] => [
+  (c >> 16) & 255,
+  (c >> 8) & 255,
+  c & 255,
+];
 export const pack = (r: number, g: number, b: number): number =>
   (clamp8(r) << 16) | (clamp8(g) << 8) | clamp8(b);
 const clamp8 = (v: number): number => Math.max(0, Math.min(255, Math.round(v)));

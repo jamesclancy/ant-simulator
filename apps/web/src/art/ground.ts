@@ -16,7 +16,8 @@ function noise(x: number, y: number, salt: number): number {
   const y0 = Math.floor(fy);
   const tx = fx - x0;
   const ty = fy - y0;
-  const h = (i: number, j: number): number => hash2((i + LATTICE) % LATTICE, (j + LATTICE) % LATTICE, salt);
+  const h = (i: number, j: number): number =>
+    hash2((i + LATTICE) % LATTICE, (j + LATTICE) % LATTICE, salt);
   const sx = tx * tx * (3 - 2 * tx);
   const sy = ty * ty * (3 - 2 * ty);
   const a = h(x0, y0) + (h(x0 + 1, y0) - h(x0, y0)) * sx;
@@ -63,7 +64,12 @@ export class GroundLayer {
   readonly view = new Container();
   private readonly puddles = new Container();
 
-  constructor(art: Art, worldSize: number, seed: number, keepClear: readonly { x: number; y: number }[]) {
+  constructor(
+    art: Art,
+    worldSize: number,
+    seed: number,
+    keepClear: readonly { x: number; y: number }[],
+  ) {
     const lawn = new TilingSprite({ texture: art.groundTile, width: worldSize, height: worldSize });
     lawn.tileScale.set(SURFACE_PX);
     this.view.addChild(lawn);

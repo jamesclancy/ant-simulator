@@ -63,7 +63,7 @@ function openTile(px: Px, floor: number, rim: number, mask: number, seed: number
     }
   }
   // Packed-dirt rim wherever the neighbour is solid.
-  if (mask & N) px.rect(0, 0, TILE, 2, rim), px.rect(0, 2, TILE, 1, mix(rim, floor, 0.5));
+  if (mask & N) (px.rect(0, 0, TILE, 2, rim), px.rect(0, 2, TILE, 1, mix(rim, floor, 0.5)));
   if (mask & S) px.rect(0, TILE - 1, TILE, 1, rim);
   if (mask & W) px.rect(0, 0, 1, TILE, rim);
   if (mask & E) px.rect(TILE - 1, 0, 1, TILE, rim);
@@ -79,13 +79,19 @@ export function registerNest(atlas: Atlas): NestTextures {
   }
   const tunnel: Texture[] = [];
   for (let m = 0; m < 16; m++) {
-    tunnel.push(atlas.define(`nest/tunnel/${m}`, TILE, TILE, (px) => openTile(px, T.tunnel, T.tunnelRim, m, 3)));
+    tunnel.push(
+      atlas.define(`nest/tunnel/${m}`, TILE, TILE, (px) =>
+        openTile(px, T.tunnel, T.tunnelRim, m, 3),
+      ),
+    );
   }
   const floors = [T.tunnel, T.chamber.queen, T.chamber.food, T.chamber.nursery];
   const chamber: Texture[][] = floors.map((floor, kind) => {
     const f = kind === 0 ? floor : lighten(floor, 0.05);
     return Array.from({ length: 16 }, (_, m) =>
-      atlas.define(`nest/chamber/${kind}/${m}`, TILE, TILE, (px) => openTile(px, f, T.tunnelRim, m, 11 + kind)),
+      atlas.define(`nest/chamber/${kind}/${m}`, TILE, TILE, (px) =>
+        openTile(px, f, T.tunnelRim, m, 11 + kind),
+      ),
     );
   });
   const rock = [0, 1].map((v) =>
@@ -141,7 +147,7 @@ export function registerNest(atlas: Atlas): NestTextures {
   const larva = [0, 1].map((f) =>
     atlas.define(`brood/larva/${f}`, 7, 5, (px) => {
       for (let i = 0; i < 5; i++) {
-        const y = 2 + (f === 0 ? (i % 2) : ((i + 1) % 2)) - 1;
+        const y = 2 + (f === 0 ? i % 2 : (i + 1) % 2) - 1;
         px.rect(1 + i, y, 1, 2, i % 2 ? T.brood.larva : lighten(T.brood.larva, 0.15));
       }
       px.set(6, 2, T.brood.larvaShade);
@@ -149,7 +155,9 @@ export function registerNest(atlas: Atlas): NestTextures {
     }),
   );
   const pupa = atlas.define('brood/pupa', 8, 5, (px) => {
-    px.ellipse(3.5, 2, 3.6, 2, (_x, _y, u) => (Math.abs(u) < 0.2 || Math.abs(u - 0.6) < 0.1 ? T.brood.pupaShade : T.brood.pupa));
+    px.ellipse(3.5, 2, 3.6, 2, (_x, _y, u) =>
+      Math.abs(u) < 0.2 || Math.abs(u - 0.6) < 0.1 ? T.brood.pupaShade : T.brood.pupa,
+    );
     px.outline(darken(T.brood.pupaShade, 0.3));
   });
   return { soil, tunnel, chamber, rock, sky, grass, water, egg, larva, pupa };

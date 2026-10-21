@@ -1,3 +1,5 @@
+import { PALETTE_LABELS, PALETTE_MODES } from '../art/palette';
+import type { PaletteMode } from '../art/palette';
 import type { Difficulty } from '@ant/shared';
 import { h, focusables, trapFocus } from './dom';
 import { DEFAULT_SANDBOX, type SandboxOptions } from '../sandbox/config';
@@ -528,6 +530,16 @@ export class Menu {
       bind(() => (select.value = settings.value[key]));
       return h('label', { class: 'menu-row' }, h('span', {}, label), select);
     };
+    const paletteChoice = (): HTMLElement => {
+      const select = h('select', {});
+      for (const mode of PALETTE_MODES)
+        select.append(h('option', { value: mode }, PALETTE_LABELS[mode]));
+      select.addEventListener('change', () =>
+        settings.update({ palette: select.value as PaletteMode }),
+      );
+      bind(() => (select.value = settings.value.palette));
+      return h('label', { class: 'menu-row' }, h('span', {}, 'Colour palette'), select);
+    };
     const slider = (
       label: string,
       key: 'uiScale' | 'soundVolume' | 'musicVolume',
@@ -570,6 +582,7 @@ export class Menu {
       ]),
       h('h2', { class: 'menu-group' }, 'Display'),
       slider('UI scale', 'uiScale', UI_SCALE_MIN, UI_SCALE_MAX, 0.05),
+      paletteChoice(),
       toggle('Reduce motion', 'reduceMotion'),
       toggle('Show FPS', 'showFps'),
       toggle('Battery saver (30 fps)', 'batterySaver'),
