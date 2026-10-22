@@ -40,3 +40,4 @@ export {
   MODEL as CAMPAIGN_MODEL,
 } from './campaign';
 export type { CampaignState, PatchState, ColonySummary, PatchDef } from './campaign';
+export * from './replay';
