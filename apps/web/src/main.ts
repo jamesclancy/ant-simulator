@@ -34,7 +34,7 @@ import { WeatherLayer } from './hazards/weatherLayer';
 import { YardFootLayer } from './hazards/yardFootLayer';
 import { App } from '@capacitor/app';
 import { haptics } from './platform/haptics';
-import { BATTERY_SAVER_FPS, PerfGovernor } from './platform/perfGovernor';
+import { PerfGovernor } from './platform/perfGovernor';
 import { initNativeShell } from './platform/nativeShell';
 import { PROFILES, type DeviceTier, type PerfProfile } from './platform/deviceTier';
 import { Menu, type NewCampaignOptions, type NewGameOptions } from './ui/menu';
@@ -91,7 +91,9 @@ async function main(): Promise<void> {
   initNativeShell();
   // ?tier=low|mid|high forces a device tier (testing); otherwise it is detected from the hardware.
   const forcedTier = params.get('tier');
-  const dpr = window.devicePixelRatio || 1;
+  // ?res=0.5 caps the render resolution (testing: software GL runners are fill-rate bound).
+  const resCap = Number(params.get('res')) || Infinity;
+  const dpr = Math.min(window.devicePixelRatio || 1, resCap);
   let profile: PerfProfile = (['low', 'mid', 'high'] as const).includes(forcedTier as DeviceTier)
     ? PROFILES[forcedTier as DeviceTier]
     : new PerfGovernor(() => {}).profile;
@@ -161,6 +163,7 @@ async function main(): Promise<void> {
   let latest: Snapshot | null = null;
   const applyProfile = (): void => {
     app.renderer.resolution = Math.min(dpr, profile.maxResolution);
+    app.ticker.maxFPS = governor.fpsCap;
     if (game) game.scent.minIntervalMs = profile.scentIntervalMs;
   };
   // Player ant under attack: at most one warning buzz every 2 s.
@@ -1006,8 +1009,8 @@ async function main(): Promise<void> {
     art.setMode(s.palette);
     fps.el.hidden = !s.showFps;
     haptics.enabled = s.haptics;
-    app.ticker.maxFPS = s.batterySaver ? BATTERY_SAVER_FPS : 0;
     governor.batterySaver = s.batterySaver;
+    app.ticker.maxFPS = governor.fpsCap;
     if (mode === 'playing') {
       if (changed.includes('scentVision')) setScent(s.scentVision);
       if (changed.includes('followCamera')) playerInput.setFollow(s.followCamera);
@@ -1019,8 +1022,8 @@ async function main(): Promise<void> {
     if (changed.includes('tutorialSeen')) return;
   });
   fps.el.hidden = !settings.value.showFps;
-  app.ticker.maxFPS = settings.value.batterySaver ? BATTERY_SAVER_FPS : 0;
   governor.batterySaver = settings.value.batterySaver;
+  app.ticker.maxFPS = governor.fpsCap;
 
   // Test hook for the e2e suite: dev and `--mode e2e` builds only, never in production.
   if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') {

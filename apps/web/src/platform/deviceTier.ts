@@ -15,6 +15,8 @@ export interface PerfProfile {
   /** Max renderer resolution (device pixel ratio cap). */
   maxResolution: number;
   antialias: boolean;
+  /** Render fps cap (0 = uncapped). Halves GPU and main-thread work on weak devices. */
+  maxFps: number;
   /** `SimConfig.maxAnts` for new games. */
   maxAnts: number;
   /** Minimum ms between scent-overlay repaints. */
@@ -29,6 +31,7 @@ export const PROFILES: Record<DeviceTier, PerfProfile> = {
     tier: 'high',
     maxResolution: 2,
     antialias: true,
+    maxFps: 0,
     maxAnts: 20000,
     scentIntervalMs: 0,
     lodZoom: 0,
@@ -38,6 +41,7 @@ export const PROFILES: Record<DeviceTier, PerfProfile> = {
     tier: 'mid',
     maxResolution: 2,
     antialias: false,
+    maxFps: 0,
     maxAnts: 8000,
     scentIntervalMs: 400,
     lodZoom: 0.5,
@@ -47,6 +51,7 @@ export const PROFILES: Record<DeviceTier, PerfProfile> = {
     tier: 'low',
     maxResolution: 1.25,
     antialias: false,
+    maxFps: 30,
     maxAnts: 3000,
     scentIntervalMs: 800,
     lodZoom: 0.8,
