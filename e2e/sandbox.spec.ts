@@ -71,3 +71,17 @@ test('sandbox: setup → paint rocks → tune → 8x → save is labelled → no
   await expect(page.getByRole('button', { name: '8x', exact: true })).toBeHidden();
   expect((await state(page)).speed).toBe(4);
 });
+
+test('sandbox: the toolbar sends the lawnmower and a walking human', async ({ page, errors }) => {
+  void errors;
+  await openMenu(page);
+  await startSandbox(page, { seed: '77' });
+  await waitForTick(page, 5);
+  const toggle = page.locator('#sandbox-toggle');
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click();
+
+  await page.locator('#sandbox-mower').click();
+  await expect(page.getByText('Lawnmower! Get your ants underground')).toBeVisible();
+  await page.locator('#sandbox-footsteps').click();
+  await expect(page.getByText('The lawnmower is coming!')).toBeVisible({ timeout: 20_000 });
+});
