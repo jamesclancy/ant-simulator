@@ -38,9 +38,12 @@ export class PerfGovernor {
     return this.profile.maxAnts;
   }
 
-  /** Render fps cap implied by battery saver (0 = uncapped). */
+  /** Render fps cap from the tier and battery saver, whichever is lower (0 = uncapped). */
   get fpsCap(): number {
-    return this.batterySaver ? BATTERY_SAVER_FPS : 0;
+    const caps = [this.profile.maxFps, this.batterySaver ? BATTERY_SAVER_FPS : 0].filter(
+      (c) => c > 0,
+    );
+    return caps.length ? Math.min(...caps) : 0;
   }
 
   reportSim(msPerTick: number): void {

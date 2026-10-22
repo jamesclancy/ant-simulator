@@ -1,4 +1,4 @@
-import { Container, Sprite, Texture, TilingSprite } from 'pixi.js';
+import { Container, Sprite, Texture } from 'pixi.js';
 import type { Art } from './index';
 import { T } from './palette';
 import { hash2, rng } from './pixels';
@@ -52,7 +52,6 @@ export function makeGroundTexture(): Texture {
   ctx.putImageData(img, 0, 0);
   const tex = Texture.from(canvas, true);
   tex.source.scaleMode = 'nearest';
-  tex.source.addressMode = 'repeat';
   return tex;
 }
 
@@ -70,8 +69,18 @@ export class GroundLayer {
     seed: number,
     keepClear: readonly { x: number; y: number }[],
   ) {
-    const lawn = new TilingSprite({ texture: art.groundTile, width: worldSize, height: worldSize });
-    lawn.tileScale.set(SURFACE_PX);
+    // A grid of plain sprites rather than a TilingSprite: its per-pixel wrapping shader roughly
+    // doubled the frame cost on software GL (CI, some low-end GPUs) for the same picture.
+    const lawn = new Container();
+    const step = TILE * SURFACE_PX;
+    for (let y = 0; y < worldSize; y += step) {
+      for (let x = 0; x < worldSize; x += step) {
+        const tile = new Sprite(art.groundTile);
+        tile.scale.set(SURFACE_PX);
+        tile.position.set(x, y);
+        lawn.addChild(tile);
+      }
+    }
     this.view.addChild(lawn);
     const d = art.decor;
     const rand = rng(seed ^ 0x51ed);
