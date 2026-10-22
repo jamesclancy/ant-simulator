@@ -61,6 +61,19 @@ describe('palettes', () => {
       }
     });
 
+    it(`${mode}: food reads against the lawn, the decor and its own outline`, () => {
+      const f = paletteFor(mode).food;
+      for (const body of [f.crumb[2], f.sugar[2], f.corpse[2]]) {
+        // Every pile has a dark ring, so the body must beat the grass and the ring must beat it too.
+        expect(seen(body, ground, mode)).toBeGreaterThan(25);
+        expect(seen(f.outline, ground, mode)).toBeGreaterThan(25);
+        expect(seen(body, f.outline, mode)).toBeGreaterThan(40);
+      }
+      // Piles are told apart from each other by hue/lightness, not shape alone.
+      expect(seen(f.crumb[2], f.sugar[2], mode)).toBeGreaterThan(15);
+      expect(seen(f.crumb[2], f.corpse[2], mode)).toBeGreaterThan(25);
+    });
+
     it(`${mode}: scent layers stay distinguishable`, () => {
       const s = paletteFor(mode).scent;
       const pack = (c: readonly number[]): number => (c[0]! << 16) | (c[1]! << 8) | c[2]!;

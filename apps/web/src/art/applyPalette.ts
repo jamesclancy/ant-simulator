@@ -10,6 +10,7 @@ export function bindPaletteCss(art: Art): void {
     root.style.setProperty('--c1', p.css.c1);
     root.style.setProperty('--player', p.css.player);
     root.style.setProperty('--accent', p.css.accent);
+    root.style.setProperty('--food-arrow', `#${p.food.crumb[2].toString(16).padStart(6, '0')}`);
   };
   apply(art.palette);
   art.onPalette(apply);

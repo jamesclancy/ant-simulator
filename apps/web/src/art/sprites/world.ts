@@ -1,70 +1,138 @@
 import type { Texture } from 'pixi.js';
 import type { Atlas } from '../atlas';
 import { T } from '../palette';
-import { hash2, mix, darken, lighten } from '../pixels';
+import { CLEAR, hash2, mix, darken, lighten } from '../pixels';
+import type { Px } from '../pixels';
 
 /** World units per art pixel on the surface. */
 export const SURFACE_PX = 2;
 
 export type FoodKind = 'crumb' | 'sugar' | 'corpse';
 
-/** Tiny seeded scatter inside a disc: returns offsets in [-r, r]. */
+/** Tiny seeded scatter inside a disc: returns offsets in [-r, r], sorted top to bottom. */
 function scatter(n: number, r: number, seed: number): { x: number; y: number; h: number }[] {
   const out: { x: number; y: number; h: number }[] = [];
-  for (let i = 0; i < n * 4 && out.length < n; i++) {
+  for (let i = 0; i < n * 6 && out.length < n; i++) {
     const x = (hash2(i, seed, 1) * 2 - 1) * r;
-    const y = (hash2(i, seed, 2) * 2 - 1) * r;
-    if (x * x + y * y <= r * r) out.push({ x, y, h: hash2(i, seed, 3) });
+    const y = (hash2(i, seed, 2) * 2 - 1) * r * 0.85;
+    if (x * x + (y * y) / 0.72 <= r * r) out.push({ x, y, h: hash2(i, seed, 3) });
   }
-  return out;
+  return out.sort((a, b) => a.y - b.y);
 }
 
-/** A food pile `r` art pixels in radius: loose crumbs, a sugar heap, or a dried insect husk. */
+/** Soft drop shadow: every drawn pixel casts a translucent one down and to the right. */
+function dropShadow(px: Px): void {
+  const solid: number[] = [];
+  for (let y = 0; y < px.h; y++)
+    for (let x = 0; x < px.w; x++) if (px.get(x, y) !== CLEAR) solid.push(x, y);
+  for (let i = 0; i < solid.length; i += 2) {
+    const x = solid[i]!;
+    const y = solid[i + 1]!;
+    for (const [dx, dy] of [
+      [1, 2],
+      [2, 2],
+      [1, 1],
+    ] as const)
+      if (px.get(x + dx, y + dy) === CLEAR) px.setA(x + dx, y + dy, 0x000000, 90);
+  }
+}
+
+/**
+ * A food pile `r` art pixels in radius: a heap of golden bread chunks, white sugar cubes, or
+ * a beetle husk. Every pile has a dark ring and a drop shadow so it reads against the lawn, and
+ * the number of pieces follows the pile's area so a depleted pile visibly shrinks.
+ */
 export function foodTexture(atlas: Atlas, kind: FoodKind, r: number, variant: number): Texture {
-  const size = r * 2 + 3;
-  return atlas.define(`food/${kind}/${r}/${variant}`, size, size, (px) => {
-    const c = r + 1;
+  const size = r * 2 + 6;
+  return atlas.define(`food/${kind}/${r}/${variant}`, size, size, (px, pal) => {
+    const f = pal.food;
+    const c = r + 2;
+    const seed = variant * 31 + r;
     if (kind === 'crumb') {
-      const n = Math.max(2, Math.round(r * r * 0.55));
-      for (const s of scatter(n, r - 1, variant * 31 + r)) {
-        const w = s.h > 0.6 ? 3 : 2;
-        const x = Math.round(c + s.x);
-        const y = Math.round(c + s.y);
-        px.rect(x, y, w, 2, T.crumb[1]);
-        px.rect(x, y, w, 1, T.crumb[3]);
-        px.set(x + w - 1, y + 1, T.crumb[0]);
+      // Darker base heap so the chunks never leave grass showing through the pile.
+      px.ellipse(c, c + 1, r - 1, (r - 1) * 0.8, f.crumb[0]);
+      const n = Math.max(3, Math.round(r * r * 0.5));
+      const big = r >= 8;
+      for (const s of scatter(n, r - 2, seed)) {
+        const w = big && s.h > 0.5 ? 5 : s.h > 0.45 ? 4 : 3;
+        const h = w > 3 ? 4 : 3;
+        const x = Math.round(c + s.x - w / 2);
+        const y = Math.round(c + s.y - h / 2);
+        px.rect(x, y, w, h, f.crumb[2]);
+        px.rect(x, y, w, 1, f.crumb[3]);
+        px.rect(x + w - 1, y + 1, 1, h - 1, f.crumb[1]);
+        px.rect(x, y + h - 1, w, 1, f.crumb[1]);
+        px.set(x, y + h - 1, f.crumb[0]);
+        px.set(x + w - 1, y + h - 1, f.crumb[0]);
+        // Sesame-like speck on some chunks.
+        if (s.h > 0.7) px.set(x + 1, y + 1, f.crumb[1]);
       }
-      px.outline(0x4a2e0c);
+      px.outline(f.outline, true);
     } else if (kind === 'sugar') {
-      px.ellipse(c, c + r * 0.15, r, r * 0.8, (x, y, u, v) => {
-        const k = hash2(x, y, variant);
-        const base = v < -0.45 ? T.sugar[2] : v > 0.4 ? T.sugar[0] : T.sugar[1];
-        return k > 0.86 ? T.sugar[2] : k < 0.1 ? T.sugar[0] : base + 0 * u;
-      });
-      // A few pink sprinkles so it reads as sweet, not as snow.
-      for (const s of scatter(Math.max(1, Math.round(r / 3)), r * 0.7, variant + 9)) {
-        px.set(c + s.x, c + s.y, T.sugar[3]);
+      px.ellipse(c, c + 1, r - 1, (r - 1) * 0.8, f.sugar[0]);
+      const n = Math.max(2, Math.round(r * r * 0.32));
+      for (const s of scatter(n, r - 2, seed + 7)) {
+        const w = r >= 8 && s.h > 0.5 ? 5 : 4;
+        const x = Math.round(c + s.x - w / 2);
+        const y = Math.round(c + s.y - w / 2);
+        px.rect(x, y, w, w, f.sugar[2]);
+        px.rect(x + w - 1, y + 1, 1, w - 1, f.sugar[1]);
+        px.rect(x, y + w - 1, w, 1, f.sugar[0]);
+        // Facet line gives each cube a top face.
+        px.rect(x, y, w - 1, 1, f.sugar[2]);
+        px.set(x + w - 1, y, f.sugar[1]);
+        if (s.h > 0.62) px.set(x + 1, y + 1, f.sugar[3]);
       }
-      px.outline(0x6e6a80);
+      px.outline(f.outline, true);
     } else {
-      // Husk of a beetle: domed shell with a centre seam, legs curled up.
-      px.ellipse(c, c, r * 0.8, r * 0.95, (_x, _y, u, v) =>
-        Math.abs(u) < 0.12
-          ? T.corpse[0]
-          : v < -0.35
-            ? T.corpse[3]
-            : v > 0.45
-              ? T.corpse[0]
-              : T.corpse[2],
-      );
-      px.ellipse(c, c - r * 0.85, r * 0.35, r * 0.3, T.corpse[1]);
-      px.outline(0x1c120a);
+      // Husk of a beetle: domed shell with a centre seam, legs curled out, bright rim light.
+      const rx = Math.max(3, r * 0.72);
+      const ry = Math.max(4, r * 0.88);
       for (const s of [-1, 1]) {
         for (let i = 0; i < 3; i++) {
-          const y = c - r * 0.35 + i * (r * 0.4);
-          px.line(c + s * r * 0.8, y, c + s * (r + 1), y - 1 + i, T.corpse[0]);
+          const y = c - ry * 0.4 + i * (ry * 0.5);
+          px.line(c + s * rx * 0.8, y, c + s * (rx + 2), y - 1 + i, f.corpse[1]);
         }
       }
+      px.ellipse(c, c + 1, rx, ry, (_x, _y, u, v) =>
+        Math.abs(u) < 0.1
+          ? f.corpse[0]
+          : v < -0.4
+            ? f.corpse[3]
+            : v > 0.4
+              ? f.corpse[1]
+              : f.corpse[2],
+      );
+      px.ellipse(c, c - ry * 0.85, rx * 0.45, ry * 0.28, f.corpse[1]);
+      px.set(c - 1, c - ry * 0.5, f.sparkle);
+      px.outline(f.outline, true);
+    }
+    dropShadow(px);
+  });
+}
+
+/** Four-point twinkle laid over a food pile; three frames from a pinprick to a full star. */
+export function glintTexture(atlas: Atlas, frame: number): Texture {
+  return atlas.define(`food/glint/${frame}`, 7, 7, (px, pal) => {
+    const col = pal.food.sparkle;
+    px.set(3, 3, col);
+    if (frame >= 1) {
+      for (const [x, y] of [
+        [2, 3],
+        [4, 3],
+        [3, 2],
+        [3, 4],
+      ] as const)
+        px.set(x, y, col);
+    }
+    if (frame >= 2) {
+      for (const [x, y] of [
+        [1, 3],
+        [5, 3],
+        [3, 1],
+        [3, 5],
+      ] as const)
+        px.set(x, y, col);
     }
   });
 }
@@ -150,6 +218,19 @@ export function dirtHeapTexture(atlas: Atlas, level: number): Texture {
   });
 }
 
+/** Bare-earth decor: dark and muted so nothing on the lawn shares food's gold. */
+const PATCH_SOIL = [
+  mix(T.dirt[1], T.grass[0], 0.55),
+  mix(T.dirt[1], T.grass[1], 0.4),
+  mix(T.dirt[2], T.grass[1], 0.5),
+];
+
+const PEBBLE = [
+  mix(T.rock[0], T.grass[0], 0.3),
+  mix(T.rock[1], T.grass[1], 0.3),
+  mix(T.rock[2], T.grass[2], 0.3),
+];
+
 export const GRASS_TUFTS = 4;
 export const PEBBLES = 4;
 export const CLOVERS = 2;
@@ -191,7 +272,7 @@ export function registerDecor(atlas: Atlas): DecorTextures {
     pebbles.push(
       atlas.define(`decor/pebble/${i}`, w + 2, 6, (px) => {
         px.ellipse((w + 1) / 2, 2.6, w / 2, 2, (_x, _y, u, v) =>
-          v < -0.2 && u < 0.3 ? T.rock[3] : v > 0.4 ? T.rock[0] : T.rock[2],
+          v < -0.2 && u < 0.3 ? PEBBLE[2] : v > 0.4 ? PEBBLE[0] : PEBBLE[1],
         );
         px.outline(0x2c2c32);
       }),
@@ -221,7 +302,7 @@ export function registerDecor(atlas: Atlas): DecorTextures {
       atlas.define(`decor/patch/${i}`, 15, 9, (px) => {
         px.ellipse(7, 4, 6.6, 3.6, (x, y) => {
           const k = hash2(x, y, i + 20);
-          return k > 0.8 ? T.dirt[3] : k > 0.35 ? T.dirt[2] : T.dirt[1];
+          return k > 0.8 ? PATCH_SOIL[2] : k > 0.35 ? PATCH_SOIL[1] : PATCH_SOIL[0];
         });
         // Ragged edge: thin out the border.
         for (let y = 0; y < 9; y++) {
@@ -237,7 +318,7 @@ export function registerDecor(atlas: Atlas): DecorTextures {
   for (let i = 0; i < LEAVES; i++) {
     leaves.push(
       atlas.define(`decor/leaf/${i}`, 9, 6, (px) => {
-        const col = i === 0 ? 0x9a5a22 : 0x6a7a2a;
+        const col = i === 0 ? 0x5e4a2c : 0x4e6226;
         px.ellipse(4, 2.6, 4, 2.2, (_x, _y, _u, v) => (v < -0.2 ? lighten(col, 0.22) : col));
         px.line(1, 3, 7, 2, darken(col, 0.4));
         px.outline(darken(col, 0.6));
