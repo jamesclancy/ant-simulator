@@ -235,7 +235,15 @@ async function main(): Promise<void> {
         ants: latest?.antCount ?? 0,
         zoom: camera.zoom,
         frames: renderedFrames,
+        nests: latest?.colonies.map((c) => c.nest) ?? [],
+        spiders: latest?.spiders.map((sp) => ({ x: sp.x, y: sp.y })) ?? [],
+        antlions: latest?.antlions.map((a) => ({ x: a.x, y: a.y })) ?? [],
       }),
+      __antFocus: (x: number, y: number, z: number) => {
+        playerInput.setFollow(false);
+        camera.focus(x, y, z);
+      },
+      __antLayer: (l: 0 | 1) => setLayer(l),
       __antAtlas: () => art.atlas.canvas.toDataURL(),
       __antSpawn: (n: number) => {
         for (const c of latest?.colonies ?? []) {

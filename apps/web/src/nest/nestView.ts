@@ -3,12 +3,14 @@ import { ChamberKind, NEST_TILE, TileType } from '@ant/shared';
 import type { ColonySnapshot, NestGridSnapshot, WaterGridSnapshot } from '@ant/shared';
 import { WaterOverlay } from '../hazards/waterOverlay';
 import type { Art } from '../art';
-import { E, N, S, SOIL_BANDS, SOIL_VARIANTS, W } from '../art/sprites/nest';
+import { E, N, S, SOIL_BANDS, W } from '../art/sprites/nest';
 import { T as PAL } from '../art/palette';
 import { hash2 } from '../art/pixels';
 
 export const NEST_BACKGROUND = 0x140d08;
 const LARVA_MS = 600;
+/** Mostly plain soil, with the odd pebble or root tile. */
+const SOIL_PICK = [0, 0, 1, 0, 0, 2, 0, 0, 3, 0, 0, 0];
 const T = NEST_TILE;
 
 const KIND_LABEL: Record<number, string> = {
@@ -130,7 +132,7 @@ export class NestView {
         const texture =
           y === 0
             ? nest.grass[hash2(x, 0, 3) > 0.5 ? 1 : 0]!
-            : nest.soil[band]![Math.floor(hash2(x, y) * SOIL_VARIANTS)]!;
+            : nest.soil[band]![SOIL_PICK[Math.floor(hash2(x, y) * SOIL_PICK.length)]!]!;
         this.soil.addParticle(new Particle({ texture, x: x * T, y: y * T }));
       }
     }

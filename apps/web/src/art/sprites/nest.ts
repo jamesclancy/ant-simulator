@@ -7,7 +7,7 @@ import { hash2, lighten, darken, mix } from '../pixels';
 /** Nest tile art size in pixels; matches NEST_TILE so one art pixel is one world unit. */
 export const TILE = 12;
 export const SOIL_VARIANTS = 4;
-export const SOIL_BANDS = 4;
+export const SOIL_BANDS = 10;
 
 /** Mask bits: set where the neighbour on that side is solid (so the tunnel shows a rim there). */
 export const N = 1;
