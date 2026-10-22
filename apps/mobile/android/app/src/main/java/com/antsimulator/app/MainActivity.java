@@ -1,4 +1,4 @@
-package com.jamesclancy.antsimulator;
+package com.antsimulator.app;
 
 import com.getcapacitor.BridgeActivity;
 

@@ -34,7 +34,7 @@ pnpm install
 ## Mobile (Capacitor)
 
 `apps/mobile` wraps the `apps/web` build in native iOS and Android apps (app id
-`com.jamesclancy.antsimulator`, set in `apps/mobile/capacitor.config.ts`). The sim runs in a Web
+`com.antsimulator.app`, set in `apps/mobile/capacitor.config.ts`). The sim runs in a Web
 Worker loaded from the bundled files; nothing relies on `SharedArrayBuffer` or COOP/COEP.
 
 Prerequisites:
