@@ -2,8 +2,8 @@
 export const PICKUP_REACH = 14;
 
 const POOL = 5;
-/** Keep arrows clear of the HUD bars along the top and bottom edges. */
-const INSET = { x: 18, top: 84, bottom: 78 };
+/** Arrow half-size plus a margin, so an arrow never touches a bar or the screen edge. */
+const PAD = 22;
 
 /**
  * Small edge-of-screen arrows pointing at known food piles that are out of view but near it.
@@ -46,6 +46,7 @@ export class FoodArrows {
     const cx = size.w / 2;
     const cy = size.h / 2;
     const reach = Math.max(size.w, size.h) * 1.5;
+    const area = this.playArea(size);
     const found: { sx: number; sy: number; d: number }[] = [];
     for (const p of piles) {
       const sx = p.x * view.zoom + view.x;
@@ -64,12 +65,51 @@ export class FoodArrows {
       }
       const dx = f.sx - cx;
       const dy = f.sy - cy;
-      const hw = cx - INSET.x;
-      const hh = dy < 0 ? cy - INSET.top : cy - INSET.bottom;
+      const hw = dx < 0 ? cx - area.left : area.right - cx;
+      const hh = dy < 0 ? cy - area.top : area.bottom - cy;
       const t = Math.min(hw / Math.max(1e-6, Math.abs(dx)), hh / Math.max(1e-6, Math.abs(dy)));
+      let x = cx + dx * t;
+      const y = cy + dy * t;
+      // On phones the joystick floats over the left edge: slide arrows out from under it.
+      const j = area.joystick;
+      if (j && x < j.right && y > j.top && y < j.bottom) x = j.right;
       a.hidden = false;
-      a.style.transform = `translate(${cx + dx * t}px, ${cy + dy * t}px) rotate(${Math.atan2(dy, dx)}rad)`;
+      a.style.transform = `translate(${x}px, ${y}px) rotate(${Math.atan2(dy, dx)}rad)`;
     }
+  }
+
+  /**
+   * The part of the viewport not covered by the HUD bars (measured, so it follows the UI scale,
+   * safe-area insets, wrapped bars on phones and orientation), the arrow's own margin inside it.
+   */
+  private playArea(size: { w: number; h: number }): {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+    joystick: { right: number; top: number; bottom: number } | null;
+  } {
+    const box = (sel: string): DOMRect | null => {
+      const el = document.querySelector(sel);
+      if (!el || el.getClientRects().length === 0) return null;
+      return el.getBoundingClientRect();
+    };
+    const top = box('#player-hud .bar');
+    const bottom = box('#hud .bar');
+    const stick = box('#joystick');
+    // The root pads itself by the safe-area insets (see style.css), so read them back resolved.
+    const pad = getComputedStyle(this.root);
+    const edge = (side: 'Top' | 'Right' | 'Bottom' | 'Left'): number =>
+      parseFloat(pad[`padding${side}`]) || 0;
+    return {
+      left: PAD + edge('Left'),
+      right: size.w - PAD - edge('Right'),
+      top: Math.max(PAD + edge('Top'), top ? top.bottom + PAD : 0),
+      bottom: Math.min(size.h - PAD - edge('Bottom'), bottom ? bottom.top - PAD : size.h),
+      joystick: stick
+        ? { right: stick.right + PAD, top: stick.top - PAD, bottom: stick.bottom + PAD }
+        : null,
+    };
   }
 
   private hide(from: number): void {

@@ -1,4 +1,4 @@
-import { Container, Sprite, Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type { Art } from './index';
 import { T } from './palette';
 import { hash2, rng } from './pixels';
@@ -82,6 +82,19 @@ export class GroundLayer {
       }
     }
     this.view.addChild(lawn);
+    // The yard's boundary: a dark hedge-green verge outside it and a bright lip on the edge, so the
+    // end of the world reads as a fence line rather than a flat, untextured canvas.
+    const big = worldSize + 32768;
+    const verge = new Graphics()
+      .rect(-16384, -16384, big, big)
+      .fill(0x24421e)
+      .rect(0, 0, worldSize, worldSize)
+      .cut()
+      .rect(-6, -6, worldSize + 12, worldSize + 12)
+      .fill(0x16280f)
+      .rect(0, 0, worldSize, worldSize)
+      .cut();
+    this.view.addChild(verge);
     const d = art.decor;
     const rand = rng(seed ^ 0x51ed);
     const decor = new Container();

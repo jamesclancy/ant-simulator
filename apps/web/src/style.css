@@ -253,6 +253,7 @@ body.in-nest #joystick {
   inset: 0;
   overflow: hidden;
   pointer-events: none;
+  padding: var(--sat) var(--sar) var(--sab) var(--sal);
 }
 .food-arrow {
   position: absolute;
