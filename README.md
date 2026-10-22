@@ -1,5 +1,7 @@
 # Ant Simulator
 
+This is all AI generated/is part of a series of experiments in long running agents.
+
 A SimAnt-inspired ant colony game for web and (later) iOS/Android from one TypeScript codebase.
 See [docs/PLAN.md](docs/PLAN.md) for the architecture and milestones.
 
