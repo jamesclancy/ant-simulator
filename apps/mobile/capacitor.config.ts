@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.jamesclancy.antsimulator',
+  appId: 'com.antsimulator.app',
   appName: 'Ant Simulator',
   // The Vite build output of apps/web; build it first (see `pnpm mobile:sync`).
   webDir: '../web/dist',

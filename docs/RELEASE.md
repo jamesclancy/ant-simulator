@@ -4,7 +4,7 @@ What the store submission needs from you (accounts, signing, listings). Everythi
 
 ## 0. Before you start
 
-- [ ] **Decide the bundle / application id.** It is `com.jamesclancy.antsimulator` (`apps/mobile/capacitor.config.ts`, the Android `applicationId`, and the Xcode bundle identifier). **It can never change after the first upload.** If you want a different one, change it in all three places first, then run `pnpm mobile:sync`.
+- [ ] **Decide the bundle / application id.** It is `com.antsimulator.app` (`apps/mobile/capacitor.config.ts`, the Android `applicationId`, and the Xcode bundle identifier). **It can never change after the first upload.** If you want a different one, change it in all three places first, then run `pnpm mobile:sync`.
 - [ ] Decide the public app name (`appName` in the config and the Android `app_name` string), and confirm the name is free on both stores.
 - [ ] Replace the placeholder icon and splash art (section 1).
 - [ ] Run a full playtest on at least one real low/mid-range Android phone and one iPhone (see section 6).
