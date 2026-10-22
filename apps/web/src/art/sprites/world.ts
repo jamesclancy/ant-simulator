@@ -221,13 +221,13 @@ const PATCH_SOIL = [
   mix(T.dirt[1], T.grass[0], 0.55),
   mix(T.dirt[1], T.grass[1], 0.4),
   mix(T.dirt[2], T.grass[1], 0.5),
-];
+] as const;
 
 const PEBBLE = [
   mix(T.rock[0], T.grass[0], 0.3),
   mix(T.rock[1], T.grass[1], 0.3),
   mix(T.rock[2], T.grass[2], 0.3),
-];
+] as const;
 
 export const GRASS_TUFTS = 4;
 export const PEBBLES = 4;
