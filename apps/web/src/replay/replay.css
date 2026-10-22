@@ -48,7 +48,7 @@
 #replay-banner {
   position: fixed;
   left: 50%;
-  top: calc(var(--sat, 0px) + 10px);
+  top: calc(var(--sat, 0px) + 96px);
   transform: translateX(-50%);
   z-index: 13;
   width: min(560px, calc(100% - 24px));
@@ -92,4 +92,9 @@ body.in-replay #sandbox {
 .replay-actions .menu-btn {
   min-height: 44px;
   flex: 1 1 auto;
+}
+/* The transport bar owns the bottom edge; the remaining HUD (layer, scent, counts) moves up. */
+body.in-replay #hud {
+  bottom: auto;
+  top: var(--sat, 0px);
 }

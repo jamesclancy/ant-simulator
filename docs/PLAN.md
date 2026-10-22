@@ -175,7 +175,7 @@ You are one ant (the "player ant") in a black ant colony fighting a red colony f
 - [x] Hazards: rain/flooding, antlion, lawnmower and yard footsteps (see [docs/YARD_HAZARDS.md](YARD_HAZARDS.md))
 - [x] Campaign: yard grid, breeder flights to found new colonies, house interior ([docs/CAMPAIGN.md](CAMPAIGN.md))
 - [x] Audio + music, art pass, accessibility (colorblind-safe red/black alternatives) ([AUDIO.md](AUDIO.md), [ART.md](ART.md))
-- [ ] Optional: replays from the command log, daily-seed challenges
+- [x] Optional: replays from the command log, daily-seed challenges — _see [REPLAYS.md](REPLAYS.md); the daily leaderboard is deferred (no server)_
 
 ---
 

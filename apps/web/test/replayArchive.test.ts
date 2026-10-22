@@ -55,9 +55,9 @@ describe('game archive', () => {
     let requests = 0;
     const archive = new GameArchive(
       {
-        getReplay: async () => {
+        getReplay: () => {
           requests++;
-          return recorded(MIN_REPLAY_TICKS);
+          return Promise.resolve(recorded(MIN_REPLAY_TICKS));
         },
       },
       store,
