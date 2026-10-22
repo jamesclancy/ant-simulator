@@ -48,8 +48,23 @@ export interface Palette {
   scent: { food: Rgb; home: Rgb; alarm: Rgb; enemy: Rgb };
   /** CSS colours for HUD pips and UI accents. */
   css: { c0: string; c1: string; player: string; accent: string };
+  /** Food piles: chosen per palette so they stay clear of the lawn, the decor and the scent overlay. */
+  food: FoodColors;
   /** Thicker, brighter silhouettes. */
   highContrast: boolean;
+}
+
+export interface FoodColors {
+  /** Dark → light ramp of bread/cookie chunks. */
+  crumb: readonly [number, number, number, number];
+  /** Dark → light ramp of sugar cubes. */
+  sugar: readonly [number, number, number, number];
+  /** Sprinkles on the sugar and the twinkle on every pile. */
+  sparkle: number;
+  /** Beetle husk shell, dark → light. */
+  corpse: readonly [number, number, number, number];
+  /** 1-px silhouette ring around every pile. */
+  outline: number;
 }
 
 function ramp(
@@ -73,6 +88,14 @@ function ramp(
 const hex = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
 const rgbOf = (c: number): Rgb => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
 
+const FOOD: FoodColors = {
+  crumb: [0x9a5a10, 0xd9892a, 0xffc13a, 0xfff0a0],
+  sugar: [0xb7b2d0, 0xe6e4f4, 0xffffff, 0xff5fa8],
+  sparkle: 0xffffff,
+  corpse: [0x4a1424, 0x7d2a3e, 0xb4485a, 0xe08a98],
+  outline: 0x2a1604,
+};
+
 const PLAYER = ramp(0xffd21a, 0x1c1300, 0xfff2a8, 0xff7a00, 0xfff7c2);
 
 function make(
@@ -81,6 +104,7 @@ function make(
   c1: AntColors,
   scent: Palette['scent'],
   accent: number,
+  food: FoodColors,
   highContrast = false,
 ): Palette {
   return {
@@ -89,6 +113,7 @@ function make(
     player: PLAYER,
     scent,
     css: { c0: hex(c0.body), c1: hex(c1.body), player: hex(PLAYER.body), accent: hex(accent) },
+    food,
     highContrast,
   };
 }
@@ -105,6 +130,7 @@ const PALETTES: Record<PaletteMode, Palette> = {
       enemy: rgbOf(0xdc46ff),
     },
     0xffd84a,
+    FOOD,
   ),
   // Red/green confusions: the rival is a light sky blue against the navy-black home colony, so
   // hue and (above all) lightness separate them; alarm trails are white instead of red.
@@ -119,6 +145,11 @@ const PALETTES: Record<PaletteMode, Palette> = {
       enemy: rgbOf(0xcc79a7),
     },
     0xf0e442,
+    {
+      ...FOOD,
+      sugar: [0xb7b2d0, 0xe6e4f4, 0xffffff, 0x2f7de8],
+      corpse: [0x1c2250, 0x3a4aa0, 0x6f8ae0, 0xb8c6ff],
+    },
   ),
   protanopia: make(
     'protanopia',
@@ -131,6 +162,11 @@ const PALETTES: Record<PaletteMode, Palette> = {
       enemy: rgbOf(0xcc79a7),
     },
     0xf0e442,
+    {
+      ...FOOD,
+      sugar: [0xb7b2d0, 0xe6e4f4, 0xffffff, 0x2f7de8],
+      corpse: [0x1c2250, 0x3a4aa0, 0x6f8ae0, 0xb8c6ff],
+    },
   ),
   // Blue/yellow confusions: keep the dark home colony and a vivid magenta-red rival.
   tritanopia: make(
@@ -144,6 +180,12 @@ const PALETTES: Record<PaletteMode, Palette> = {
       enemy: rgbOf(0x7a3ac8),
     },
     0xff9a5a,
+    {
+      ...FOOD,
+      crumb: [0x8a3a10, 0xd8641e, 0xff9a4a, 0xffe0c0],
+      sugar: [0xb7b2d0, 0xe6e4f4, 0xffffff, 0xe0306e],
+      corpse: [0x3a0a24, 0x701c4c, 0xa8408c, 0xe08ad0],
+    },
   ),
   highContrast: make(
     'highContrast',
@@ -156,6 +198,13 @@ const PALETTES: Record<PaletteMode, Palette> = {
       enemy: rgbOf(0xff00ff),
     },
     0xffff00,
+    {
+      crumb: [0x806000, 0xe0b000, 0xffff00, 0xffffff],
+      sugar: [0xd0d0d0, 0xf0f0f0, 0xffffff, 0xff00ff],
+      sparkle: 0xffffff,
+      corpse: [0x300030, 0x700070, 0xc000c0, 0xff80ff],
+      outline: 0x000000,
+    },
     true,
   ),
 };
@@ -178,9 +227,8 @@ export const T = {
   water: [0x1e5fa8, 0x3b8ed8, 0x7cc0f0, 0xbfe2ff],
   sky: 0x6fb4d8,
   skyLight: 0x8ecbe8,
-  crumb: [0x8a5a1c, 0xc98a2c, 0xe8b84a, 0xffe08a],
-  sugar: [0xbcb8c8, 0xe4e2ec, 0xffffff, 0xff9ec0],
-  corpse: [0x3a2a1c, 0x5c4630, 0x7a6244, 0xa8895a],
+  /** Crumb the ants carry (matches the default food pile ramp). */
+  crumb: [0x9a5a10, 0xd9892a, 0xffc13a, 0xfff0a0],
   spider: [0x140c18, 0x2a1a2e, 0x4b2f55, 0x7a4f88],
   spiderEye: 0xff4040,
   jaw: 0x2b1d10,

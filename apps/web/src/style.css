@@ -247,3 +247,33 @@ body.in-nest #joystick {
   background: transparent;
   border: 1px solid #5c8a4a;
 }
+
+.food-arrows {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  padding: var(--sat) var(--sar) var(--sab) var(--sal);
+}
+.food-arrow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  background: var(--food-arrow, #ffc13a);
+  clip-path: polygon(0 10%, 100% 50%, 0 90%, 25% 50%);
+  filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000);
+}
+#p-pickup.ready {
+  background: #ffc13a;
+  color: #2a1604;
+  outline: 2px solid #fff;
+  animation: pickup-ready 0.9s steps(2, end) infinite;
+}
+@keyframes pickup-ready {
+  50% {
+    outline-color: #2a1604;
+  }
+}

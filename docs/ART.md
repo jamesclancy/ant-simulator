@@ -26,6 +26,22 @@ apps/web/scripts/brand.mjs   the pixel ant mark shared by the PWA and native ico
 - **Colour is never the only cue.** Colony 0 has a round abdomen and a pale spot, colony 1 a pointed
   abdomen with two pale bands, the player a bright stripe. HUD pips are a circle and a diamond.
 
+## Food
+
+Food must be the easiest thing on the lawn to find, so it follows a few rules:
+
+- **Chunky, outlined, shadowed.** Piles are heaps of bread chunks, sugar cubes or a beetle husk, each
+  with a dark 1-px ring and a drop shadow; piece count follows the pile's area so it visibly shrinks
+  as it is eaten (never below 4 art pixels in radius).
+- **Decor stays out of its way.** Bare-earth patches, pebbles and leaves are muted and darker than
+  food, so nothing decorative shares its hue or lightness.
+- **Per-palette colours.** `Palette.food` holds the crumb, sugar, husk, sparkle and ring colours;
+  `palette.test.ts` checks they beat the lawn under each simulated deficiency.
+- **Readability aids.** A slow twinkle on each pile (off with Reduce motion), a minimum on-screen
+  size when zoomed out (`worldLayer.ts`), edge-of-screen arrows toward off-screen piles
+  (`foodArrows.ts`, Settings → Display → Food arrows) and a highlighted Pick up button while a pile
+  is within reach. Piles draw above the scent-vision overlay.
+
 ## Accessibility palettes
 
 Settings → Display → Colour palette: default, deuteranopia, protanopia, tritanopia, high contrast.

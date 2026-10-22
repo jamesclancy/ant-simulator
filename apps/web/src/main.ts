@@ -17,6 +17,7 @@ import { GroundLayer } from './art/ground';
 import { Camera } from './camera';
 import { ScentOverlay } from './scentOverlay';
 import { WorldLayer } from './worldLayer';
+import { FoodArrows, PICKUP_REACH } from './foodArrows';
 import { SimClient } from './simClient';
 import { pauseWhenBackgrounded } from './lifecycle';
 import { bindSaves, hasSave, loadLatest, type SaveSlot } from './save';
@@ -141,6 +142,8 @@ async function main(): Promise<void> {
   nestCamera.enabled = false;
   const settings = new SettingsStore();
   await settings.load();
+  const foodArrows = new FoodArrows(host);
+  foodArrows.setEnabled(settings.value.foodArrows);
   bindDocumentSettings(settings);
   const art = new Art(settings.value.palette);
   bindPaletteCss(art);
@@ -358,6 +361,11 @@ async function main(): Promise<void> {
       const pl = snapshot.player;
       playerNow = pl && { x: pl.x, y: pl.y, heading: pl.heading, carrying: pl.carrying > 0 };
       playerInput.onSnapshot(pl, snapshot.events);
+      playerInput.setFoodInReach(
+        !!pl &&
+          pl.carrying <= 0 &&
+          snapshot.food.some((f) => Math.hypot(f.x - pl.x, f.y - pl.y) - f.radius <= PICKUP_REACH),
+      );
       if (mode === 'menu' && settings.value.reduceMotion && g.focused && !backdropFrozen) {
         // Static backdrop: stop the ambient sim once it has drawn a frame.
         backdropFrozen = true;
@@ -514,6 +522,7 @@ async function main(): Promise<void> {
     g.ground.setWetness(weather.intensity);
     g.ants.setAnimation(now, !reduce);
     g.marker.setReduceMotion(reduce);
+    g.worldLayer.setReduceMotion(reduce);
     g.spiders.setReduceMotion(reduce);
     g.mower.setReduceMotion(reduce);
     for (const n of g.nests) {
@@ -533,8 +542,19 @@ async function main(): Promise<void> {
       }
     }
     if (layer !== 0) {
+      foodArrows.update([], { x: 0, y: 0, zoom: 1 }, { w: 0, h: 0 }, false);
       g.nests[viewNest]?.ants.update();
       return;
+    }
+    g.worldLayer.tick(now, camera.zoom);
+    {
+      const r = host.getBoundingClientRect();
+      foodArrows.update(
+        g.worldLayer.positions,
+        { x: world.x, y: world.y, zoom: camera.zoom },
+        { w: r.width, h: r.height },
+        mode === 'playing',
+      );
     }
     g.ants.setStride(camera.zoom < profile.lodZoom ? profile.lodStride : 1);
     g.ants.update();
@@ -1197,6 +1217,7 @@ async function main(): Promise<void> {
       if (changed.includes('scentVision')) setScent(s.scentVision);
       if (changed.includes('followCamera')) playerInput.setFollow(s.followCamera);
     }
+    foodArrows.setEnabled(s.foodArrows);
     if (changed.includes('reduceMotion') && mode === 'menu') {
       backdropFrozen = false;
       sim.setPaused(false);

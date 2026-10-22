@@ -12,6 +12,7 @@ import type { SpiderTextures } from './sprites/creatures';
 import {
   dirtHeapTexture,
   foodTexture,
+  glintTexture,
   moundTexture,
   registerDecor,
   registerRain,
@@ -75,8 +76,12 @@ export class Art {
     return Math.max(2, Math.round(worldRadius / per));
   }
 
+  /** Food pile sprite; piles never draw smaller than 4 art pixels in radius, however depleted. */
   food(kind: FoodKind, worldRadius: number, id: number): Texture {
-    return foodTexture(this.atlas, kind, this.px(worldRadius, 2), id % 3);
+    return foodTexture(this.atlas, kind, Math.max(4, this.px(worldRadius, 2)), id % 3);
+  }
+  glint(frame: number): Texture {
+    return glintTexture(this.atlas, frame);
   }
   rock(worldRadius: number, id: number): Texture {
     return rockTexture(this.atlas, this.px(worldRadius, 2), id % 3);

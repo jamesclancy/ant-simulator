@@ -14,6 +14,8 @@ export interface Settings {
   /** HUD / menu scale, 0.8..1.5. */
   uiScale: number;
   reduceMotion: boolean;
+  /** Edge-of-screen arrows toward food piles that are out of view. */
+  foodArrows: boolean;
   /** Colour-vision-safe colony / scent palette. */
   palette: PaletteMode;
   /** 0..1 volume of sound effects and of music. */
@@ -41,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   joystickSide: 'left',
   uiScale: 1,
   reduceMotion: false,
+  foodArrows: true,
   palette: 'default',
   soundVolume: 0.8,
   musicVolume: 0.5,
@@ -73,6 +76,7 @@ export function sanitizeSettings(raw: unknown, base: Settings = DEFAULT_SETTINGS
     joystickSide: oneOf(r.joystickSide, ['left', 'right'], base.joystickSide),
     uiScale: clamp(r.uiScale, UI_SCALE_MIN, UI_SCALE_MAX, base.uiScale),
     reduceMotion: bool(r.reduceMotion, base.reduceMotion),
+    foodArrows: bool(r.foodArrows, base.foodArrows),
     palette: oneOf(r.palette, PALETTE_MODES, base.palette),
     soundVolume: clamp(r.soundVolume, 0, 1, base.soundVolume),
     musicVolume: clamp(r.musicVolume, 0, 1, base.musicVolume),

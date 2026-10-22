@@ -75,6 +75,11 @@ export class PlayerInput {
     this.el.follow.setAttribute('aria-pressed', String(on));
   }
 
+  /** Highlight the Pick up button while a food pile is within reach. */
+  setFoodInReach(on: boolean): void {
+    this.el.pickup.classList.toggle('ready', on);
+  }
+
   /** Reflect sim state in the HUD and show toasts for events. */
   onSnapshot(player: PlayerInfo | null, events: readonly SimEvent[]): void {
     const { el } = this;

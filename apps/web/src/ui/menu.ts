@@ -562,6 +562,7 @@ export class Menu {
         | 'scentVision'
         | 'followCamera'
         | 'reduceMotion'
+        | 'foodArrows'
         | 'showFps'
         | 'haptics'
         | 'batterySaver'
@@ -639,6 +640,7 @@ export class Menu {
       slider('UI scale', 'uiScale', UI_SCALE_MIN, UI_SCALE_MAX, 0.05),
       paletteChoice(),
       toggle('Reduce motion', 'reduceMotion'),
+      toggle('Food arrows', 'foodArrows'),
       toggle('Show FPS', 'showFps'),
       toggle('Battery saver (30 fps)', 'batterySaver'),
       toggle('Haptics', 'haptics'),
