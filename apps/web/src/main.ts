@@ -29,7 +29,9 @@ import { ColonyPanel } from './nest/colonyPanel';
 import { DirtMound } from './nest/dirtMound';
 import { SpiderLayer } from './predators/spiderLayer';
 import { AntlionLayer } from './hazards/antlionLayer';
+import { MowerLayer } from './hazards/mowerLayer';
 import { WeatherLayer } from './hazards/weatherLayer';
+import { YardFootLayer } from './hazards/yardFootLayer';
 import { App } from '@capacitor/app';
 import { haptics } from './platform/haptics';
 import { BATTERY_SAVER_FPS, PerfGovernor } from './platform/perfGovernor';
@@ -73,6 +75,8 @@ interface Scene {
   ants: AntLayer;
   spiders: SpiderLayer;
   antlions: AntlionLayer;
+  mower: MowerLayer;
+  yardFeet: YardFootLayer;
   marker: PlayerMarker;
   nests: { view: NestView; ants: AntLayer; framed: boolean }[];
   focused: boolean;
@@ -138,6 +142,7 @@ async function main(): Promise<void> {
     difficulty: Difficulty;
     sandbox?: SandboxOptions;
     campaign?: boolean;
+    yardHazards?: boolean;
   } = {
     seed: 0,
     difficulty,
@@ -195,6 +200,12 @@ async function main(): Promise<void> {
     const antlions = new AntlionLayer(world, art);
     world.addChildAt(antlions.view, 1);
     antlions.setReduceMotion(settings.value.reduceMotion);
+    // Mower lanes are marked on the grass; feet and the mower itself draw over everything.
+    const mower = new MowerLayer(world, config.worldSize, art);
+    world.addChildAt(mower.lanes, 2);
+    mower.setReduceMotion(settings.value.reduceMotion);
+    const yardFeet = new YardFootLayer(world, art);
+    world.addChild(mower.view);
     const nests = [];
     for (let c = 0; c < config.colonies; c++) {
       const view = new NestView(c, art);
@@ -216,6 +227,8 @@ async function main(): Promise<void> {
       ants,
       spiders,
       antlions,
+      mower,
+      yardFeet,
       marker,
       nests,
       focused: false,
@@ -301,6 +314,9 @@ async function main(): Promise<void> {
       g.ants.push(snapshot, speed);
       g.spiders.update(snapshot);
       g.antlions.update(snapshot);
+      g.mower.update(snapshot);
+      // House rooms draw their own feet (campaign layer); everywhere else the yard walker's.
+      g.yardFeet.update(campaign.inRoom ? undefined : snapshot.footsteps);
       weather.update(snapshot);
       const pl = snapshot.player;
       playerNow = pl && { x: pl.x, y: pl.y, heading: pl.heading, carrying: pl.carrying > 0 };
@@ -340,9 +356,36 @@ async function main(): Promise<void> {
               ? 'An antlion got your ant!'
               : ev.cause === 'drowned'
                 ? 'Your ant drowned in the flood!'
-                : 'A spider ate your ant!',
+                : ev.cause === 'mower'
+                  ? 'Your ant was mowed down!'
+                  : ev.cause === 'stomped'
+                    ? 'Your ant was stepped on!'
+                    : 'A spider ate your ant!',
           );
-          haptics.warning();
+          if (ev.cause === 'mower' || ev.cause === 'stomped') haptics.heavy();
+          else haptics.warning();
+        }
+        if (ev.type === 'mowerWarning')
+          playerInput.toast(
+            'Lawnmower! Get your ants underground — it will sweep the marked lanes',
+          );
+        if (ev.type === 'mowerStarted') playerInput.toast('The lawnmower is coming!');
+        if (ev.type === 'mowerEnded')
+          playerInput.toast(
+            ev.kills > 0
+              ? `The lawnmower has gone — ${ev.kills} ants lost`
+              : 'The lawnmower has gone',
+          );
+        if (ev.type === 'humansWarning')
+          playerInput.toast('Human approaching — watch for shadows on the grass');
+        if (ev.type === 'footstep' && mode === 'playing' && !settings.value.reduceMotion) {
+          const c = toWorld(host.clientWidth / 2, host.clientHeight / 2);
+          const d = Math.hypot(ev.x - c.x, ev.y - c.y);
+          if (layer === 0 && d < 1000) camera.shake(10 * (1 - d / 1000) + 2, 300);
+        }
+        if (ev.type === 'footstep' && mode === 'playing' && playerNow) {
+          // A foot landing right beside the player's ant is felt even when it survives.
+          if (Math.hypot(ev.x - playerNow.x, ev.y - playerNow.y) < 260) haptics.heavy();
         }
         if (ev.type === 'rainWarning') playerInput.toast('Dark clouds gather — rain is coming!');
         if (ev.type === 'rainStarted')
@@ -415,6 +458,9 @@ async function main(): Promise<void> {
       : {}),
   });
 
+  // Runs first each frame: last frame's shake offset comes off before the view is moved.
+  app.ticker.add(() => camera.unshake(), undefined, 1);
+  app.ticker.add(() => camera.applyShake(app.ticker.deltaMS), undefined, -1);
   app.ticker.add(() => {
     renderedFrames++;
     fps.tick(app.ticker.FPS, governor.simMs);
@@ -429,6 +475,7 @@ async function main(): Promise<void> {
     g.ants.setAnimation(now, !reduce);
     g.marker.setReduceMotion(reduce);
     g.spiders.setReduceMotion(reduce);
+    g.mower.setReduceMotion(reduce);
     for (const n of g.nests) {
       n.ants.setAnimation(now, !reduce);
       n.view.setReduceMotion(reduce);
@@ -453,6 +500,14 @@ async function main(): Promise<void> {
     g.ants.update();
     g.spiders.tick(app.ticker.deltaMS);
     g.antlions.tick(app.ticker.deltaMS);
+    g.mower.tick(app.ticker.deltaMS);
+    const mowerAt = g.mower.position;
+    if (mowerAt && mode === 'playing' && !reduce) {
+      // The mower's engine shakes the view while it is on screen.
+      const c = toWorld(host.clientWidth / 2, host.clientHeight / 2);
+      const d = Math.hypot(mowerAt.x - c.x, mowerAt.y - c.y);
+      if (d < 700) camera.shake(2 + 2 * (1 - d / 700), 120);
+    }
     const pos = g.ants.playerPos.valid ? g.ants.playerPos : null;
     g.marker.update(pos, playerNow?.heading ?? 0, playerNow?.carrying ?? false, camera.zoom);
     if (pos && playerInput.follow && mode === 'playing') camera.centerOn(pos.x, pos.y);
@@ -674,6 +729,7 @@ async function main(): Promise<void> {
           seed: undefined,
           tutorial: false,
           ...(lastConfig.sandbox ? { sandbox: lastConfig.sandbox } : {}),
+          ...(lastConfig.yardHazards === false ? { yardHazards: false } : {}),
         }),
   );
 
@@ -717,6 +773,8 @@ async function main(): Promise<void> {
       if (sp) camera.focus(sp.x, sp.y, 1);
     });
     add('Start rain', () => sim.sendCommands([{ type: 'startRain', ticks: 900 }]));
+    add('Send lawnmower', () => sim.sendCommands([{ type: 'startMower' }]));
+    add('Send human footsteps', () => sim.sendCommands([{ type: 'startYardSteps' }]));
     add('Add antlion pit (+6 ants)', (s) => {
       const p = near(s, PLAYER_COLONY);
       const x = p.x + 240;
@@ -766,6 +824,7 @@ async function main(): Promise<void> {
             seed: lastConfig.seed,
             tutorial: false,
             ...(lastConfig.sandbox ? { sandbox: lastConfig.sandbox } : {}),
+            ...(lastConfig.yardHazards === false ? { yardHazards: false } : {}),
           }),
     onQuit: () => startBackdrop(),
     onNewCampaign: (options) => startCampaign(options),
@@ -802,6 +861,7 @@ async function main(): Promise<void> {
       seed: options.seed ?? randomSeed(),
       difficulty: options.difficulty,
       ...(options.sandbox ? { sandbox: options.sandbox } : {}),
+      ...(options.yardHazards === false ? { yardHazards: false } : {}),
     };
     menu.close();
     syncMenuClasses();
@@ -815,6 +875,9 @@ async function main(): Promise<void> {
       difficulty: lastConfig.difficulty,
       maxAnts: governor.maxAnts,
       ...(lastConfig.sandbox ? sandboxConfig(lastConfig.sandbox) : {}),
+      ...(lastConfig.yardHazards === false
+        ? { lawnmower: { enabled: false }, yardSteps: { enabled: false } }
+        : {}),
     });
     sim.setPaused(false);
     sim.setSpeed(speed);

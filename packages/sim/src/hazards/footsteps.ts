@@ -29,6 +29,7 @@ interface Foot {
   radius?: number;
   warn?: number;
   show?: number;
+  angle?: number;
 }
 
 /** Shape of one foot of a scripted walk (see `Footsteps.addFoot`). */
@@ -40,6 +41,8 @@ export interface FootSpec {
   radius: number;
   warn: number;
   show: number;
+  /** Walking direction in radians. */
+  angle: number;
 }
 
 export interface FootstepsState {
@@ -99,6 +102,7 @@ export class Footsteps {
       radius: spec.radius,
       warn: spec.warn,
       show: spec.show,
+      angle: spec.angle,
     });
   }
 
@@ -164,6 +168,7 @@ export class Footsteps {
           radius: f.radius ?? F.radius,
           progress: Math.min(1, f.age / warn),
           stamped: f.age >= warn,
+          ...(f.angle !== undefined ? { angle: f.angle } : {}),
         };
       });
   }

@@ -17,7 +17,7 @@ class FakeBackend implements AudioBackend {
   play(id: SfxId, options: PlayOptions = {}): void {
     this.plays.push({ id, options });
   }
-  setLoop(id: 'rain' | 'skitter', level: number): void {
+  setLoop(id: 'rain' | 'skitter' | 'mower', level: number): void {
     this.loops[id] = level;
   }
   setMusic(track: 'menu' | 'game' | null, intensity: number): void {
@@ -286,7 +286,41 @@ describe('AudioDirector', () => {
     expect(backend.loops.skitter).toBeLessThan(0.2);
     director.onSnapshot(snap({ antCount: 1500, ants }, 3), ctx());
     director.idle(ctx({ paused: true }));
-    expect(backend.loops).toEqual({ rain: 0, skitter: 0 });
+    expect(backend.loops).toEqual({ rain: 0, skitter: 0, mower: 0 });
+  });
+
+  it('revs the engine when warned and drones as the mower passes, louder when near', () => {
+    const { backend, director } = setup();
+    director.onSnapshot(snap(), ctx());
+    const mower = (pos: number, phase = 'mowing', startsIn = 0) => ({
+      phase,
+      startsIn,
+      axis: 'x',
+      lanes: [500],
+      width: 140,
+      pass: 0,
+      dir: 1,
+      pos,
+      onField: true,
+    });
+    director.onSnapshot(snap({ mower: mower(0, 'warning', 150) }, 2), ctx());
+    expect(backend.count('engineRise')).toBe(0);
+    director.onSnapshot(snap({ mower: mower(0, 'warning', 50) }, 3), ctx());
+    director.onSnapshot(snap({ mower: mower(0, 'warning', 49) }, 4), ctx());
+    expect(backend.count('engineRise')).toBe(1);
+    director.onSnapshot(
+      snap({ mower: mower(500) }, 5),
+      ctx({ view: { x: 500, y: 500, halfWidth: 300 } }),
+    );
+    const near = backend.loops.mower!;
+    director.onSnapshot(
+      snap({ mower: mower(1900) }, 6),
+      ctx({ view: { x: 500, y: 500, halfWidth: 300 } }),
+    );
+    expect(near).toBeGreaterThan(0.9);
+    expect(backend.loops.mower).toBeLessThan(near);
+    director.onSnapshot(snap({}, 5), ctx());
+    expect(backend.loops.mower).toBe(0);
   });
 
   it('resets its baseline when a new game restarts the tick counter', () => {

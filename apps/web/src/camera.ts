@@ -27,6 +27,10 @@ export class Camera {
   private pinchDist = 0;
   private wheelAcc = 0;
   private pinchMid = { x: 0, y: 0 };
+  private shakeLeft = 0;
+  private shakeSpan = 1;
+  private shakeAmp = 0;
+  private shakeOff = { x: 0, y: 0 };
   /** Device pixel ratio used to keep the view on whole device pixels. */
   pixelRatio = 1;
 
@@ -87,6 +91,34 @@ export class Camera {
     );
     this.zoomAt(e.clientX - r.left, e.clientY - r.top, ZOOM_STEPS[i]! / this.world.scale.x);
   };
+
+  /** Shake the view by up to `amp` screen pixels, fading over `ms`. A stronger shake wins. */
+  shake(amp: number, ms: number): void {
+    if (amp < this.shakeAmp * (this.shakeLeft / this.shakeSpan)) return;
+    this.shakeAmp = amp;
+    this.shakeLeft = this.shakeSpan = ms;
+  }
+
+  /** Take back last frame's shake offset: call before anything that moves the view. */
+  unshake(): void {
+    this.world.position.x -= this.shakeOff.x;
+    this.world.position.y -= this.shakeOff.y;
+    this.shakeOff = { x: 0, y: 0 };
+  }
+
+  /** Apply this frame's shake offset (whole pixels): call after the view is placed. */
+  applyShake(dtMs: number): void {
+    if (this.shakeLeft <= 0) return;
+    this.shakeLeft = Math.max(0, this.shakeLeft - dtMs);
+    const k = (this.shakeAmp * this.shakeLeft) / this.shakeSpan;
+    const t = this.shakeLeft;
+    this.shakeOff = {
+      x: Math.round(Math.sin(t * 0.09) * k),
+      y: Math.round(Math.cos(t * 0.13) * k),
+    };
+    this.world.position.x += this.shakeOff.x;
+    this.world.position.y += this.shakeOff.y;
+  }
 
   /** Keep the world on whole device pixels so nearest-neighbour art never shimmers. Call each frame. */
   snapToPixels(): void {

@@ -135,6 +135,18 @@ export const SFX_PARAMS: Record<SfxId, SfxParams> = {
     decay: 1.6,
     volume: 0.9,
   },
+  // The mower's engine catching and revving up, played in the last seconds of its warning.
+  engineRise: {
+    wave: 'saw',
+    freq: 55,
+    slide: 0.8,
+    vibrato: [22, 0.7],
+    lowpass: 1500,
+    attack: 2,
+    sustain: 0.7,
+    decay: 0.2,
+    volume: 0.45,
+  },
   queenLost: {
     wave: 'saw',
     freq: 392,

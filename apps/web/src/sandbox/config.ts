@@ -9,6 +9,8 @@ export interface SandboxOptions {
   foodPiles: number;
   /** Spiders, antlion pits and rain. */
   hazards: boolean;
+  /** The lawnmower and walking humans visit on their own timers (the toolbar can send them anyway). */
+  yardHazards: boolean;
   /** The red colony's AI director runs. */
   ai: boolean;
   /** The game can be won or lost (a queen dying ends it). */
@@ -20,6 +22,7 @@ export const DEFAULT_SANDBOX: Readonly<SandboxOptions> = {
   ants: 300,
   foodPiles: 6,
   hazards: false,
+  yardHazards: false,
   ai: true,
   winLose: false,
 };
@@ -34,5 +37,6 @@ export function sandboxConfig(o: SandboxOptions): SimConfigInput {
     ai: o.ai,
     winLose: o.winLose,
     ...(o.hazards ? {} : { spiders: 0, antlions: 0, rain: { enabled: false } }),
+    ...(o.yardHazards ? {} : { lawnmower: { enabled: false }, yardSteps: { enabled: false } }),
   };
 }

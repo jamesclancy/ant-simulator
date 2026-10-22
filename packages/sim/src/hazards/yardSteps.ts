@@ -105,6 +105,7 @@ export class YardSteps {
         radius: c.radius,
         warn: c.shadowTicks,
         show: c.showTicks,
+        angle: a,
       });
     }
   }

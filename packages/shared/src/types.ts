@@ -781,6 +781,8 @@ export interface FootstepInfo {
   progress: number;
   /** True for the few ticks after it stamped down. */
   stamped: boolean;
+  /** Walking direction in radians (yard walks; absent for the random house feet). */
+  angle?: number;
 }
 
 /** Campaign-only actions (main thread -> worker `campaign` message). */

@@ -35,7 +35,7 @@ export class WebAudioBackend implements AudioBackend {
   private suspended = false;
   private wantTrack: TrackId | null = null;
   private wantIntensity = 0;
-  private wantLoops: Record<LoopId, number> = { rain: 0, skitter: 0 };
+  private wantLoops: Record<LoopId, number> = { rain: 0, skitter: 0, mower: 0 };
   private music: TrackPlayer | null = null;
   private pulse = new Map<number, PeriodicWave>();
   private noise!: AudioBuffer;
@@ -103,7 +103,7 @@ export class WebAudioBackend implements AudioBackend {
     silent.connect(ctx.destination);
     silent.start(0);
     this.applyMusic();
-    for (const id of ['rain', 'skitter'] as const) this.setLoop(id, this.wantLoops[id]);
+    for (const id of ['rain', 'skitter', 'mower'] as const) this.setLoop(id, this.wantLoops[id]);
   }
 
   private buildLoops(ctx: AudioContext): void {
@@ -134,6 +134,36 @@ export class WebAudioBackend implements AudioBackend {
     skitter.connect(bp).connect(skitterGain).connect(this.sfxBus);
     skitter.start();
     this.loops.set('skitter', skitterGain);
+
+    // Mower engine: a rough sawtooth drone with a wobbling pitch, over a bed of noise.
+    const engine = ctx.createOscillator();
+    engine.type = 'sawtooth';
+    engine.frequency.value = 62;
+    const wobble = ctx.createOscillator();
+    wobble.frequency.value = 9;
+    const wobbleDepth = ctx.createGain();
+    wobbleDepth.gain.value = 5;
+    wobble.connect(wobbleDepth).connect(engine.frequency);
+    const engineLp = ctx.createBiquadFilter();
+    engineLp.type = 'lowpass';
+    engineLp.frequency.value = 650;
+    const mowerGain = ctx.createGain();
+    mowerGain.gain.value = 0;
+    engine.connect(engineLp).connect(mowerGain);
+    const whirr = ctx.createBufferSource();
+    whirr.buffer = noiseBuffer(ctx, 1.3, false);
+    whirr.loop = true;
+    const whirrBp = ctx.createBiquadFilter();
+    whirrBp.type = 'bandpass';
+    whirrBp.frequency.value = 1500;
+    const whirrGain = ctx.createGain();
+    whirrGain.gain.value = 0.22;
+    whirr.connect(whirrBp).connect(whirrGain).connect(mowerGain);
+    mowerGain.connect(this.sfxBus);
+    engine.start();
+    wobble.start();
+    whirr.start();
+    this.loops.set('mower', mowerGain);
   }
 
   private get running(): boolean {
@@ -207,7 +237,7 @@ export class WebAudioBackend implements AudioBackend {
     const node = this.loops.get(id);
     const ctx = this.ctx;
     if (!node || !ctx) return;
-    const peak = id === 'rain' ? 0.55 : 0.35;
+    const peak = id === 'rain' ? 0.55 : id === 'mower' ? 0.5 : 0.35;
     node.gain.setTargetAtTime(Math.max(0, Math.min(1, level)) * peak, ctx.currentTime, 0.25);
   }
 

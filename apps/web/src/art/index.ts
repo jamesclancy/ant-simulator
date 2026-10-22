@@ -18,6 +18,8 @@ import {
   rockTexture,
 } from './sprites/world';
 import type { DecorTextures, FoodKind, RainTextures } from './sprites/world';
+import { registerYard } from './sprites/yard';
+import type { YardTextures } from './sprites/yard';
 
 export { PALETTE_LABELS, PALETTE_MODES, paletteFor } from './palette';
 export type { PaletteMode, Palette } from './palette';
@@ -32,6 +34,7 @@ export class Art {
   readonly spider: SpiderTextures;
   readonly decor: DecorTextures;
   readonly rain: RainTextures;
+  readonly yard: YardTextures;
   readonly jaws: Texture[];
   readonly groundTile: Texture;
   private pal: Palette;
@@ -45,6 +48,7 @@ export class Art {
     this.spider = registerSpider(this.atlas);
     this.decor = registerDecor(this.atlas);
     this.rain = registerRain(this.atlas);
+    this.yard = registerYard(this.atlas);
     this.jaws = jawTextures(this.atlas);
     this.groundTile = makeGroundTexture();
   }

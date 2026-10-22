@@ -12,7 +12,16 @@ import type { AudioBackend, PlayOptions, SfxId, TrackId } from './types';
 /** The slice of a snapshot the director reads (lets tests build small fixtures). */
 export type AudioSnapshot = Pick<
   Snapshot,
-  'tick' | 'antCount' | 'ants' | 'player' | 'events' | 'colonies' | 'spiders' | 'weather' | 'winner'
+  | 'tick'
+  | 'antCount'
+  | 'ants'
+  | 'player'
+  | 'events'
+  | 'colonies'
+  | 'spiders'
+  | 'weather'
+  | 'winner'
+  | 'mower'
 >;
 
 export interface DirectorContext {
@@ -61,13 +70,20 @@ export const EVENT_CUES: Record<string, EventCue> = {
   playerSwapped: { sfx: 'swap' },
   playerEaten: {
     sfx: (ev) =>
-      ev.cause === 'antlion' ? 'antlion' : ev.cause === 'drowned' ? 'hurt' : 'spiderHiss',
+      ev.cause === 'antlion'
+        ? 'antlion'
+        : ev.cause === 'drowned'
+          ? 'hurt'
+          : ev.cause === 'mower' || ev.cause === 'stomped'
+            ? 'death'
+            : 'spiderHiss',
     gain: 1,
   },
   spiderKilled: { sfx: 'spiderDeath' },
   antlionKilled: { sfx: 'spiderDeath', gain: 0.8 },
   rainWarning: { sfx: 'rumble', minIntervalMs: 8000 },
   rainStarted: { sfx: 'thunder' },
+  humansWarning: { sfx: 'rumble', minIntervalMs: 6000 },
   queenKilled: { sfx: (ev) => (ev.colony === PLAYER_COLONY ? 'queenLost' : 'queenKilled') },
   // Campaign.
   matingFlight: { sfx: (ev) => (ev.colony === PLAYER_COLONY ? 'recruit' : null), gain: 1 },
@@ -84,6 +100,9 @@ export const EVENT_CUES: Record<string, EventCue> = {
   footstep: { sfx: 'thunder', gain: 0.6 },
   campaignOver: { sfx: (ev) => (ev.won ? 'victory' : 'defeat') },
 };
+
+/** The engine starts revving this many ticks before the mower comes on (the sound lasts ~3 s). */
+const ENGINE_LEAD_TICKS = 60;
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
@@ -102,6 +121,8 @@ export class AudioDirector {
 
   private lastTick = -1;
   private seen = false;
+  /** The engine-revving sound of the current mower warning has played. */
+  private revved = false;
   private carrying = 0;
   private recruits = 0;
   private trail = false;
@@ -153,6 +174,7 @@ export class AudioDirector {
       this.music('menu', 0);
       this.backend.setLoop('rain', 0);
       this.backend.setLoop('skitter', 0);
+      this.backend.setLoop('mower', 0);
       return;
     }
     const first = !this.seen;
@@ -179,6 +201,12 @@ export class AudioDirector {
       'skitter',
       ctx.paused || this.over ? 0 : surface ? crowd * near * 0.8 : crowd * 0.12,
     );
+    this.backend.setLoop('mower', ctx.paused || this.over ? 0 : this.mowerLevel(s, ctx));
+    if (s.mower?.phase !== 'warning') this.revved = false;
+    else if (!this.revved && s.mower.startsIn <= ENGINE_LEAD_TICKS && live) {
+      this.revved = true;
+      this.backend.play('engineRise', { gain: ctx.layer === 0 ? 1 : 0.4 });
+    }
     this.thunder(s, ctx);
 
     // Music: fight intensity rises quickly and falls slowly.
@@ -202,6 +230,7 @@ export class AudioDirector {
     this.intensity = 0;
     this.backend.setLoop('rain', 0);
     this.backend.setLoop('skitter', 0);
+    this.backend.setLoop('mower', 0);
     if (this.sentTrack === 'game') this.music('game', 0);
   }
 
@@ -307,6 +336,17 @@ export class AudioDirector {
       minMs: cue.minIntervalMs ?? 0,
       ...(cue.gain !== undefined ? { gain: cue.gain } : {}),
     });
+  }
+
+  /** Engine loudness: full beside the mower, fading to a hum a few screens away; muffled underground. */
+  private mowerLevel(s: AudioSnapshot, ctx: DirectorContext): number {
+    const m = s.mower;
+    if (!m || !m.onField) return 0;
+    const lane = m.lanes[m.pass] ?? 0;
+    const mx = m.axis === 'x' ? m.pos : lane;
+    const my = m.axis === 'x' ? lane : m.pos;
+    const near = 1 - Math.hypot(mx - ctx.view.x, my - ctx.view.y) / 1800;
+    return clamp(near, 0.12, 1) * (ctx.layer === 0 ? 1 : 0.3);
   }
 
   private thunder(s: AudioSnapshot, ctx: DirectorContext): void {

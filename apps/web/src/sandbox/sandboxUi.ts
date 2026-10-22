@@ -219,6 +219,8 @@ export class SandboxUi {
       () => opts.send([this.raining ? { type: 'stopRain' } : { type: 'startRain' }]),
       this.rainBtn,
     );
+    act('Send mower', () => opts.send([{ type: 'startMower' }])).id = 'sandbox-mower';
+    act('Send footsteps', () => opts.send([{ type: 'startYardSteps' }])).id = 'sandbox-footsteps';
     act('Clear scent', () => {
       opts.send([{ type: 'clearPheromones' }]);
       opts.toast('Pheromones cleared');

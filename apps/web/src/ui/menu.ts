@@ -20,6 +20,8 @@ export interface NewGameOptions {
   /** Undefined = pick a random seed. */
   seed: number | undefined;
   tutorial: boolean;
+  /** The lawnmower and walking humans visit the yard (default on). */
+  yardHazards?: boolean;
   /** Present for a sandbox game. */
   sandbox?: SandboxOptions;
 }
@@ -261,6 +263,8 @@ export class Menu {
     });
     const tutorial = h('input', { id: 'tutorial-opt', type: 'checkbox' });
     tutorial.checked = !settings.value.tutorialSeen;
+    const yardHazards = h('input', { id: 'yard-hazards-opt', type: 'checkbox' });
+    yardHazards.checked = true;
     const start = this.button(
       'Start',
       () => {
@@ -274,6 +278,7 @@ export class Menu {
           difficulty: this.difficulty,
           seed: parsed,
           tutorial: tutorial.checked,
+          yardHazards: yardHazards.checked,
         });
       },
       'primary',
@@ -300,6 +305,12 @@ export class Menu {
           { class: 'menu-check', for: 'tutorial-opt' },
           tutorial,
           h('span', {}, 'Show tutorial'),
+        ),
+        h(
+          'label',
+          { class: 'menu-check', for: 'yard-hazards-opt' },
+          yardHazards,
+          h('span', {}, 'Lawnmower and footsteps'),
         ),
         h('div', { class: 'menu-list' }, start, this.backButton()),
       ],
@@ -429,7 +440,10 @@ export class Menu {
       show();
       return h('label', { class: 'menu-row', for: id }, h('span', {}, label), input, out);
     };
-    const check = (label: string, key: 'hazards' | 'ai' | 'winLose'): HTMLLabelElement => {
+    const check = (
+      label: string,
+      key: 'hazards' | 'yardHazards' | 'ai' | 'winLose',
+    ): HTMLLabelElement => {
       const input = h('input', { type: 'checkbox' });
       input.checked = o[key];
       input.addEventListener('change', () => (o[key] = input.checked));
@@ -473,6 +487,7 @@ export class Menu {
       slider('sb-ants', 'Starting ants', 'ants', 20, 1500, 20),
       slider('sb-food', 'Food piles', 'foodPiles', 0, 20, 1),
       check('Hazards (spiders, antlions, rain)', 'hazards'),
+      check('Yard hazards (lawnmower, footsteps)', 'yardHazards'),
       aiRow,
       check('Win / lose conditions', 'winLose'),
       h(
