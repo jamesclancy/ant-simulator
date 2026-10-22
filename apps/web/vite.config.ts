@@ -35,7 +35,7 @@ export default defineConfig({
       },
       workbox: {
         // App shell plus the sim worker bundle (both live under assets/).
-        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,ttf,webmanifest}'],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
