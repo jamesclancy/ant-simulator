@@ -84,8 +84,8 @@ export class WorldLayer {
       for (const child of this.food.removeChildren()) child.destroy();
       this.piles = [];
       for (const f of snapshot.food) {
-        // Visual size follows remaining amount (area ~ amount), a touch over the pickup radius.
-        const r = Math.max(8, Math.min(f.radius, Math.sqrt(f.amount) * 0.6) * 1.2);
+        // Visual size follows remaining amount (area ~ amount), well over the pickup radius.
+        const r = Math.max(8, Math.min(f.radius, Math.sqrt(f.amount) * 0.6) * 1.5);
         const kind: FoodKind = this.corpses.has(f.id)
           ? 'corpse'
           : f.id % 3 === 0

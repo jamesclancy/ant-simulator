@@ -50,38 +50,36 @@ export function foodTexture(atlas: Atlas, kind: FoodKind, r: number, variant: nu
     const seed = variant * 31 + r;
     if (kind === 'crumb') {
       // Darker base heap so the chunks never leave grass showing through the pile.
-      px.ellipse(c, c + 1, r - 1, (r - 1) * 0.8, f.crumb[0]);
-      const n = Math.max(3, Math.round(r * r * 0.5));
-      const big = r >= 8;
+      px.ellipse(c, c + 1, r - 1, (r - 1) * 0.8, f.crumb[1]);
+      // Chunk size grows with the pile so a big heap shows bold pieces, not noise.
+      const n = Math.max(3, Math.round(r * r * (r >= 8 ? 0.2 : 0.3)));
       for (const s of scatter(n, r - 2, seed)) {
-        const w = big && s.h > 0.5 ? 5 : s.h > 0.45 ? 4 : 3;
-        const h = w > 3 ? 4 : 3;
+        const w = (r >= 8 ? 5 : 4) + (s.h > 0.5 ? 1 : 0);
+        const h = w - 1;
         const x = Math.round(c + s.x - w / 2);
         const y = Math.round(c + s.y - h / 2);
-        px.rect(x, y, w, h, f.crumb[2]);
-        px.rect(x, y, w, 1, f.crumb[3]);
-        px.rect(x + w - 1, y + 1, 1, h - 1, f.crumb[1]);
-        px.rect(x, y + h - 1, w, 1, f.crumb[1]);
-        px.set(x, y + h - 1, f.crumb[0]);
-        px.set(x + w - 1, y + h - 1, f.crumb[0]);
-        // Sesame-like speck on some chunks.
-        if (s.h > 0.7) px.set(x + 1, y + 1, f.crumb[1]);
+        // Bread chunk: dark crust edge, lit top face, shaded right and bottom.
+        px.rect(x, y, w, h, f.crumb[0]);
+        px.rect(x + 1, y + 1, w - 2, h - 2, f.crumb[2]);
+        px.rect(x + 1, y + 1, w - 2, 1, f.crumb[3]);
+        px.rect(x + w - 2, y + 2, 1, h - 3, f.crumb[1]);
+        px.rect(x + 1, y + h - 2, w - 2, 1, f.crumb[1]);
+        if (s.h > 0.75) px.set(x + 2, y + 2, f.crumb[1]);
       }
       px.outline(f.outline, true);
     } else if (kind === 'sugar') {
-      px.ellipse(c, c + 1, r - 1, (r - 1) * 0.8, f.sugar[0]);
-      const n = Math.max(2, Math.round(r * r * 0.32));
+      px.ellipse(c, c + 1, r - 1, (r - 1) * 0.8, darken(f.sugar[0], 0.4));
+      const n = Math.max(2, Math.round(r * r * (r >= 8 ? 0.22 : 0.3)));
       for (const s of scatter(n, r - 2, seed + 7)) {
-        const w = r >= 8 && s.h > 0.5 ? 5 : 4;
+        const w = r >= 8 ? 6 : 5;
         const x = Math.round(c + s.x - w / 2);
         const y = Math.round(c + s.y - w / 2);
-        px.rect(x, y, w, w, f.sugar[2]);
-        px.rect(x + w - 1, y + 1, 1, w - 1, f.sugar[1]);
-        px.rect(x, y + w - 1, w, 1, f.sugar[0]);
-        // Facet line gives each cube a top face.
-        px.rect(x, y, w - 1, 1, f.sugar[2]);
-        px.set(x + w - 1, y, f.sugar[1]);
-        if (s.h > 0.62) px.set(x + 1, y + 1, f.sugar[3]);
+        // Cube: grey-lilac edge, bright top-left face, shaded right and bottom.
+        px.rect(x, y, w, w, f.sugar[0]);
+        px.rect(x + 1, y + 1, w - 2, w - 2, f.sugar[2]);
+        px.rect(x + w - 2, y + 1, 1, w - 2, f.sugar[1]);
+        px.rect(x + 1, y + w - 2, w - 2, 1, f.sugar[1]);
+        if (s.h > 0.55) px.set(x + 2, y + 2, f.sugar[3]);
       }
       px.outline(f.outline, true);
     } else {
