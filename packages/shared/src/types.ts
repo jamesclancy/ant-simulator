@@ -45,6 +45,10 @@ export interface SimConfig {
   antlion: AntlionConfig;
   /** Rain / flooding tuning (see `DEFAULT_RAIN`); `difficulty` scales frequency and length. */
   rain: RainConfig;
+  /** Lawnmower tuning (see `DEFAULT_LAWNMOWER`); `difficulty` scales frequency and passes. */
+  lawnmower: LawnmowerConfig;
+  /** Yard footsteps tuning (see `DEFAULT_YARD_STEPS`); `difficulty` scales frequency. */
+  yardSteps: YardStepsConfig;
   /** Sandbox game: enables the sandbox-only commands (rocks, live colony / combat / scent tuning). */
   sandbox: boolean;
   /** The red colony's AI director runs. Off = the other colonies keep their starting ratios. */
@@ -192,6 +196,54 @@ export interface RainConfig {
   broodKill: number;
 }
 
+/** Lawnmower tuning. Durations are ticks at the fixed tick rate, lengths world units. */
+export interface LawnmowerConfig {
+  /** Mowing happens on its own (the `startMower` command works regardless). */
+  enabled: boolean;
+  /** Frequency multiplier: gaps are divided by it (campaign patches vary it). */
+  frequency: number;
+  /** Ticks of quiet between mowings (uniform in the range). */
+  minGap: number;
+  maxGap: number;
+  /** A warning event (and the lane telegraph) comes this many ticks before the mower starts. */
+  warningTicks: number;
+  /** Width of the swath in world units. */
+  width: number;
+  /** World units travelled per tick. */
+  speed: number;
+  /** Straight passes per mowing (uniform integer in the range, scaled by difficulty). */
+  minPasses: number;
+  maxPasses: number;
+  /** Ticks between passes while the mower turns round off-screen. */
+  turnTicks: number;
+  /** Food piles of at most this amount are swept away; bigger ones lose `bigFoodLoss` of it. */
+  smallFood: number;
+  bigFoodLoss: number;
+}
+
+/** Yard footsteps tuning: a human walks a line across the yard, one foot at a time. */
+export interface YardStepsConfig {
+  /** Walks happen on their own (the `startYardSteps` command works regardless). */
+  enabled: boolean;
+  /** Frequency multiplier: gaps are divided by it. */
+  frequency: number;
+  minGap: number;
+  maxGap: number;
+  /** A warning event comes this many ticks before the first foot's shadow. */
+  warningTicks: number;
+  /** Feet per walk (uniform integer in the range). */
+  minFeet: number;
+  maxFeet: number;
+  /** Distance between consecutive feet, ticks between their shadows appearing, left/right offset. */
+  stride: number;
+  strideTicks: number;
+  offset: number;
+  /** Foot radius in world units, shadow time before the stamp, and how long the print stays. */
+  radius: number;
+  shadowTicks: number;
+  showTicks: number;
+}
+
 /** Fractions of the (worker) population assigned to each job. Normalised on use. */
 export interface BehaviorRatio {
   forage: number;
@@ -298,7 +350,10 @@ export interface AntBehaviorConfig {
 
 /** Input accepted by `createSim` / the worker `init` message: everything optional. */
 export type SimConfigInput = Partial<
-  Omit<SimConfig, 'behavior' | 'colony' | 'combat' | 'spider' | 'antlion' | 'rain'>
+  Omit<
+    SimConfig,
+    'behavior' | 'colony' | 'combat' | 'spider' | 'antlion' | 'rain' | 'lawnmower' | 'yardSteps'
+  >
 > & {
   behavior?: Partial<AntBehaviorConfig>;
   colony?: Partial<ColonyConfig>;
@@ -306,6 +361,8 @@ export type SimConfigInput = Partial<
   spider?: Partial<SpiderConfig>;
   antlion?: Partial<AntlionConfig>;
   rain?: Partial<RainConfig>;
+  lawnmower?: Partial<LawnmowerConfig>;
+  yardSteps?: Partial<YardStepsConfig>;
 };
 
 /** Per-ant behaviour state, stored in `AntStore.state`. Steering logic lives elsewhere. */
@@ -377,6 +434,10 @@ export type Command =
   | { type: 'startRain'; ticks?: number }
   /** End the current shower (it fades out). */
   | { type: 'stopRain' }
+  /** Send the lawnmower now (debug / sandbox); `passes` defaults to a random number. */
+  | { type: 'startMower'; passes?: number }
+  /** A human walks across the yard now (debug / sandbox). */
+  | { type: 'startYardSteps' }
   /** Dig an antlion pit at a surface point (debug / sandbox). */
   | { type: 'addAntlion'; x: number; y: number }
   /** Sandbox: place a rock (impassable disc for surface ants; radius is clamped). */
@@ -411,7 +472,7 @@ export type SimEvent =
    * The player's ant was lost: eaten by a spider (no `cause`), pulled into an antlion pit or
    * drowned in a flooded tunnel (`playerSwapped` follows when another ant takes over).
    */
-  | { type: 'playerEaten'; cause?: 'antlion' | 'drowned' }
+  | { type: 'playerEaten'; cause?: 'antlion' | 'drowned' | 'mower' | 'stomped' }
   /** A spider was killed; it leaves a food pile and respawns after a cooldown. */
   | { type: 'spiderKilled'; x: number; y: number }
   /** Rain is about to start (`warningTicks` ahead). */
@@ -420,6 +481,13 @@ export type SimEvent =
   | { type: 'rainEnded' }
   /** A mob killed an antlion; it left food and its pit is now inert sand. */
   | { type: 'antlionKilled'; x: number; y: number }
+  /** The lawnmower starts in `ticks`: its lanes are on `Snapshot.mower`. */
+  | { type: 'mowerWarning'; ticks: number }
+  | { type: 'mowerStarted' }
+  /** The last pass is done; the mower killed `kills` surface ants in total. */
+  | { type: 'mowerEnded'; kills: number }
+  /** A human is about to walk across the yard (`ticks` before the first shadow). */
+  | { type: 'humansWarning'; ticks: number }
   /** Campaign: breeders of `colony` left on a mating flight; `founded` lists the patches that got a new colony. */
   | { type: 'matingFlight'; colony: number; breeders: number; founded: number[] }
   /** Campaign: a new colony of `colony` was founded in yard/house patch `patch`. */
@@ -602,7 +670,9 @@ export interface Snapshot {
   obstacles?: ObstacleInfo[];
   /** Campaign games: the map overview, when it changed since the previous snapshot. */
   campaign?: CampaignSnapshot;
-  /** Campaign house rooms: human feet over the patch (every snapshot while any are present). */
+  /** The lawnmower, while it is warming up or mowing. */
+  mower?: MowerInfo;
+  /** Campaign house rooms and yard walks: human feet over the patch (every snapshot while any are present). */
   footsteps?: FootstepInfo[];
 }
 
@@ -682,6 +752,25 @@ export interface CampaignSnapshot {
   outcome: '' | 'victory' | 'defeat';
 }
 
+/** The lawnmower between its warning and its last pass. */
+export interface MowerInfo {
+  /** Warming up (lanes telegraphed) or cutting. */
+  phase: 'warning' | 'mowing';
+  /** Ticks until the first pass while warming up, else 0. */
+  startsIn: number;
+  /** The mower travels along this axis; lanes are positions on the other one. */
+  axis: 'x' | 'y';
+  /** Lane centres, in pass order, and the swath width. */
+  lanes: number[];
+  width: number;
+  /** Current pass index (-1 while warming up), travel direction (+1/-1) and front position on the axis. */
+  pass: number;
+  dir: 1 | -1;
+  pos: number;
+  /** False while turning round between passes. */
+  onField: boolean;
+}
+
 /** A human foot over a house room: a growing shadow, then a stamp. */
 export interface FootstepInfo {
   id: number;
@@ -692,6 +781,8 @@ export interface FootstepInfo {
   progress: number;
   /** True for the few ticks after it stamped down. */
   stamped: boolean;
+  /** Walking direction in radians (yard walks; absent for the random house feet). */
+  angle?: number;
 }
 
 /** Campaign-only actions (main thread -> worker `campaign` message). */

@@ -52,6 +52,11 @@ export class CampaignUi {
     return this.info !== null;
   }
 
+  /** The detailed patch is a house room (it draws its own feet). */
+  get inRoom(): boolean {
+    return this.feet !== null;
+  }
+
   get mapOpen(): boolean {
     return this.map.isOpen;
   }

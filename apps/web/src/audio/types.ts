@@ -17,6 +17,7 @@ export const SFX_IDS = [
   'antlion',
   'rumble',
   'thunder',
+  'engineRise',
   'queenLost',
   'queenKilled',
   'victory',
@@ -25,7 +26,7 @@ export const SFX_IDS = [
 export type SfxId = (typeof SFX_IDS)[number];
 
 /** Continuous beds whose level the director sets every snapshot. */
-export type LoopId = 'rain' | 'skitter';
+export type LoopId = 'rain' | 'skitter' | 'mower';
 export type TrackId = 'menu' | 'game';
 
 export interface PlayOptions {

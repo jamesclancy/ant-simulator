@@ -4,15 +4,16 @@ A SimAnt "Experimental"-style game mode: no pressure, full control. Start it fro
 
 ## Setup
 
-| Option                | Meaning                                                                  |
-| --------------------- | ------------------------------------------------------------------------ |
-| Colonies              | Black only (nest in the middle) or black & red                           |
-| Starting ants         | Per colony                                                               |
-| Food piles            | Placed at start                                                          |
-| Hazards               | Spiders, antlion pits and rain (off by default)                          |
-| Red colony AI         | Runs the red director (`config.ai`); off = red keeps its starting ratios |
-| Win / lose conditions | Off by default: a dead queen does not end the game (`config.winLose`)    |
-| Seed                  | Blank = random                                                           |
+| Option                | Meaning                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Colonies              | Black only (nest in the middle) or black & red                                                                            |
+| Starting ants         | Per colony                                                                                                                |
+| Food piles            | Placed at start                                                                                                           |
+| Hazards               | Spiders, antlion pits and rain (off by default)                                                                           |
+| Yard hazards          | Lawnmower and walking humans on their own timers (off; the toolbar's Send mower / Send footsteps buttons work either way) |
+| Red colony AI         | Runs the red director (`config.ai`); off = red keeps its starting ratios                                                  |
+| Win / lose conditions | Off by default: a dead queen does not end the game (`config.winLose`)                                                     |
+| Seed                  | Blank = random                                                                                                            |
 
 These map onto `SimConfig` (`sandbox`, `ai`, `winLose`, `colonies`, ...) in `apps/web/src/sandbox/config.ts`.
 

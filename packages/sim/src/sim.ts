@@ -13,7 +13,9 @@ import {
   DEFAULT_FOOD_AMOUNT,
   DEFAULT_FOOD_SOURCES,
   DEFAULT_NEST_RADIUS,
+  DEFAULT_LAWNMOWER,
   DEFAULT_RAIN,
+  DEFAULT_YARD_STEPS,
   DEFAULT_SEED,
   DEFAULT_SPIDER,
   DEFAULT_SPIDER_COUNT,
@@ -43,7 +45,7 @@ import { Colony, takeCensus } from './colony';
 import { Combat } from './combat';
 import { PheromoneField } from './pheromones';
 import { SpiderManager } from './predators';
-import { AntlionManager, Weather, placeAntlions } from './hazards';
+import { AntlionManager, Lawnmower, Weather, YardSteps, placeAntlions } from './hazards';
 import { PlayerController, isPlayerCommand } from './player';
 import { createRng } from './rng';
 import { MAX_OBSTACLE_RADIUS, MIN_OBSTACLE_RADIUS, createWorld } from './world';
@@ -129,6 +131,10 @@ export interface Sim {
   readonly antlions: AntlionManager;
   /** Rain and the flooding it causes. */
   readonly weather: Weather;
+  /** The lawnmower. */
+  readonly mower: Lawnmower;
+  /** Humans walking across the yard. */
+  readonly yardSteps: YardSteps;
   /** Sandbox live-tuning applied so far (a copy). */
   readonly tuning: SandboxTuning;
   /** -1 while running; else the winning colony id, or -2 if none is left. */
@@ -155,7 +161,8 @@ export interface Sim {
 }
 
 export function resolveConfig(partial: SimConfigInput = {}): SimConfig {
-  const { behavior, colony, combat, spider, antlion, rain, ...rest } = partial;
+  const { behavior, colony, combat, spider, antlion, rain, lawnmower, yardSteps, ...rest } =
+    partial;
   const merged = { ...DEFAULT_COMBAT, ...combat };
   return {
     seed: DEFAULT_SEED,
@@ -186,6 +193,8 @@ export function resolveConfig(partial: SimConfigInput = {}): SimConfig {
       damage: [...(antlion?.damage ?? DEFAULT_ANTLION.damage)] as [number, number, number],
     },
     rain: { ...DEFAULT_RAIN, ...rain },
+    lawnmower: { ...DEFAULT_LAWNMOWER, ...lawnmower },
+    yardSteps: { ...DEFAULT_YARD_STEPS, ...yardSteps },
     behavior: { ...DEFAULT_BEHAVIOR, ...behavior },
     colony: { ...DEFAULT_COLONY, ...colony },
     combat: { ...merged, hp: [...merged.hp], damage: [...merged.damage] },
@@ -272,6 +281,13 @@ export function createSim(partial: SimConfigInput = {}, extras: SimExtras = {}):
     antlions.add(site.x, site.y);
   }
   const weather = new Weather(config.rain, config.difficulty, config.seed, colonies);
+  const mower = new Lawnmower(config.lawnmower, config.difficulty, config.worldSize, config.seed);
+  const yardSteps = new YardSteps(
+    config.yardSteps,
+    config.difficulty,
+    config.worldSize,
+    config.seed,
+  );
   const remap = new Int32Array(ants.capacity);
   let tick = 0;
   let winner = -1;
@@ -435,6 +451,12 @@ export function createSim(partial: SimConfigInput = {}, extras: SimExtras = {}):
       setState: (st) => antlions.setState(st),
     },
     { key: 'weather', getState: () => weather.getState(), setState: (st) => weather.setState(st) },
+    { key: 'mower', getState: () => mower.getState(), setState: (st) => mower.setState(st) },
+    {
+      key: 'yardSteps',
+      getState: () => yardSteps.getState(),
+      setState: (st) => yardSteps.setState(st),
+    },
     {
       key: 'obstacles',
       getState: () => world.obstacles.getState(),
@@ -526,6 +548,8 @@ export function createSim(partial: SimConfigInput = {}, extras: SimExtras = {}):
     spiders,
     antlions,
     weather,
+    mower,
+    yardSteps,
     get tuning() {
       return structuredClone(tuning);
     },
@@ -580,6 +604,12 @@ export function createSim(partial: SimConfigInput = {}, extras: SimExtras = {}):
             break;
           case 'stopRain':
             weather.stop();
+            break;
+          case 'startMower':
+            mower.start(events, cmd.passes);
+            break;
+          case 'startYardSteps':
+            yardSteps.start();
             break;
           case 'addAntlion':
             antlions.add(clamp(cmd.x, 0, config.worldSize), clamp(cmd.y, 0, config.worldSize));
@@ -645,6 +675,15 @@ export function createSim(partial: SimConfigInput = {}, extras: SimExtras = {}):
         antlions.step({ ants, world, playerIndex: player.index, antStep, events });
       }
       weather.step({ ants, colonies, fields, playerIndex: player.index, antStep, events });
+      mower.step({
+        ants,
+        world,
+        fields,
+        colonies,
+        playerIndex: player.index,
+        events,
+      });
+      yardSteps.step({ ants, playerIndex: player.index, events });
       reap();
       if (config.ai) for (const d of directors) d.update(tick);
       for (const f of fields) f.update();
@@ -687,6 +726,9 @@ export function createSim(partial: SimConfigInput = {}, extras: SimExtras = {}):
         antlions: antlions.info(),
         weather: weather.info(),
       };
+      const mowerInfo = mower.info();
+      if (mowerInfo) snap.mower = mowerInfo;
+      if (yardSteps.count) snap.footsteps = yardSteps.info();
       if (config.sandbox && (options?.obstacles || sentRocks !== world.obstacles.version)) {
         sentRocks = world.obstacles.version;
         snap.obstacles = world.obstacles

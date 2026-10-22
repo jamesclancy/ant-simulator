@@ -14,11 +14,15 @@ describe('sandboxConfig', () => {
       spiders: 0,
       antlions: 0,
       rain: { enabled: false },
+      lawnmower: { enabled: false },
+      yardSteps: { enabled: false },
     });
     const sim = createSim({ ...c, worldSize: 1024 });
     expect(sim.spiders.count).toBe(0);
     expect(sim.antlions.count).toBe(0);
     expect(sim.config.rain.enabled).toBe(false);
+    expect(sim.config.lawnmower.enabled).toBe(false);
+    expect(sim.config.yardSteps.enabled).toBe(false);
     expect(sim.config.sandbox).toBe(true);
   });
 
@@ -26,6 +30,16 @@ describe('sandboxConfig', () => {
     const c = sandboxConfig({ ...DEFAULT_SANDBOX, hazards: true, colonies: 1, winLose: true });
     expect(c.spiders).toBeUndefined();
     expect(c.rain).toBeUndefined();
+    expect(c.lawnmower).toBeDefined(); // yard hazards are their own switch
     expect(c).toMatchObject({ colonies: 1, winLose: true });
+  });
+
+  it('lets the setup turn the lawnmower and footsteps on', () => {
+    const c = sandboxConfig({ ...DEFAULT_SANDBOX, yardHazards: true });
+    expect(c.lawnmower).toBeUndefined();
+    expect(c.yardSteps).toBeUndefined();
+    const sim = createSim({ ...c, worldSize: 1024 });
+    expect(sim.config.lawnmower.enabled).toBe(true);
+    expect(sim.config.yardSteps.enabled).toBe(true);
   });
 });

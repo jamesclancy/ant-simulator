@@ -52,6 +52,9 @@ Only the **active** patch is a full `Sim` (`packages/sim/src/sim.ts`). Every oth
 - **Humans** (`campaign/footsteps.ts`): in a room patch, feet appear as a growing shadow and stamp
   after 2 s, killing every surface ant underneath (underground ants are safe). They come more often
   the more black ants are in the house and aim at black ants 60% of the time.
+- **Yard patches** get the lawnmower and a walking human (see [YARD_HAZARDS.md](YARD_HAZARDS.md)) at a
+  per-patch frequency derived from the patch seed (some patches get neither). Rooms keep the house
+  feet above and never see the mower.
 - **Infestation meter:** with at least the target number of black ants in the house (220 / 350 /
   500 by difficulty) it fills (faster with more, ~2 min from empty); below it it drains.
   **Victory** when it is full: the humans move out.

@@ -27,7 +27,7 @@ You are one ant (the "player ant") in a black ant colony fighting a red colony f
 ### World elements
 - **Surface layer**: top-down 2D yard (grass, rocks, pebbles, food, water puddles).
 - **Underground layer**: side-view cross-section of each nest, with diggable soil and chambers (queen, brood, food storage).
-- **Hazards**: spider (roaming predator), antlion pit, rain (floods tunnels, washes out trails), lawnmower/footsteps (v2).
+- **Hazards**: spider (roaming predator), antlion pit, rain (floods tunnels, washes out trails), lawnmower and footsteps.
 - **Enemy colony**: same sim rules as yours, run by AI that sets its own caste and behavior ratios.
 
 ---
@@ -172,9 +172,9 @@ You are one ant (the "player ant") in a black ant colony fighting a red colony f
 
 ### Phase 5 — Content & depth (ongoing)
 - [x] Sandbox mode ([docs/SANDBOX.md](SANDBOX.md))
-- [x] Hazards: rain/flooding, antlion (footsteps/lawnmower still to do, not started)
+- [x] Hazards: rain/flooding, antlion, lawnmower and yard footsteps (see [docs/YARD_HAZARDS.md](YARD_HAZARDS.md))
 - [x] Campaign: yard grid, breeder flights to found new colonies, house interior ([docs/CAMPAIGN.md](CAMPAIGN.md))
-- [ ] Audio + music, art pass, accessibility (colorblind-safe red/black alternatives)
+- [x] Audio + music, art pass, accessibility (colorblind-safe red/black alternatives) ([AUDIO.md](AUDIO.md), [ART.md](ART.md))
 - [ ] Optional: replays from the command log, daily-seed challenges
 
 ---
