@@ -1,5 +1,5 @@
 export { createSim, resolveConfig, restoreSim } from './sim';
-export type { Sim, SimModule, SimState } from './sim';
+export type { Sim, SimExtras, SimModule, SimState } from './sim';
 export { SaveError, SAVE_VERSION, readSaveInfo } from './save/format';
 export type { SaveInfo } from './save/format';
 export { createRng } from './rng';
@@ -20,3 +20,12 @@ export { SpiderManager, SPIDER_DIFFICULTY } from './predators';
 export type { SpiderData, SpiderManagerState } from './predators';
 export { AntlionManager, Weather, Water, placeAntlions, RAIN_DIFFICULTY } from './hazards';
 export type { AntlionData, AntlionManagerState, WeatherState, WaterState } from './hazards';
+export {
+  Campaign,
+  restoreCampaign,
+  isCampaignSave,
+  abstractTick,
+  buildLayout,
+  MODEL as CAMPAIGN_MODEL,
+} from './campaign';
+export type { CampaignState, PatchState, ColonySummary, PatchDef } from './campaign';

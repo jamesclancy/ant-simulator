@@ -1,0 +1,184 @@
+/* Campaign HUD strip and yard map. Placeholder look: the art pass restyles these. */
+:root {
+  --cmap-black: #2a2a2a;
+  --cmap-red: #b8402e;
+  --cmap-empty: #4f7a45;
+  --cmap-room: #c9bfa9;
+}
+#campaign-hud {
+  position: fixed;
+  left: var(--sal);
+  top: calc(var(--sat) + 70px);
+  padding: 0 12px;
+  pointer-events: none;
+}
+#campaign-hud .bar {
+  flex-direction: column;
+  align-items: stretch;
+}
+.chud-progress {
+  padding: 2px 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+#campaign-flight {
+  background: #ffd400;
+  color: #2a2000;
+}
+@media (max-width: 700px) {
+  /* Phones: the player bar wraps to two rows across the top; sit below it on the right. */
+  #campaign-hud {
+    left: auto;
+    right: var(--sar);
+    top: calc(var(--sat) + 150px);
+  }
+  .chud-progress {
+    max-width: 96px;
+    font-size: 12px;
+  }
+}
+body.in-menu #campaign-hud,
+body.in-nest #campaign-hud {
+  display: none;
+}
+
+#campaign-map {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--sat) + 8px) calc(var(--sar) + 8px) calc(var(--sab) + 8px)
+    calc(var(--sal) + 8px);
+  background: rgb(0 0 0 / 55%);
+}
+#campaign-map[hidden] {
+  display: none;
+}
+.cmap-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(100%, 640px);
+  max-height: 100%;
+  overflow: auto;
+  padding: 14px;
+  border-radius: 14px;
+  background: #1f2f1f;
+  color: #e8f0e8;
+}
+.cmap-head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.cmap-status {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  opacity: 0.85;
+}
+.cmap-meter {
+  position: relative;
+  height: 22px;
+  border-radius: 6px;
+  background: #3a3a3a;
+  overflow: hidden;
+}
+.cmap-meter-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #c98a2a;
+}
+.cmap-meter-text {
+  position: relative;
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 22px;
+}
+.cmap-grid {
+  display: grid;
+  /* Fit the 8 map rows on short landscape screens too. */
+  width: min(100%, calc(100dvh - 190px));
+  margin: 0 auto;
+  grid-template-columns: repeat(var(--cols, 8), 1fr);
+  gap: 3px;
+}
+.cmap-cell {
+  position: relative;
+  min-width: 0;
+  min-height: 44px;
+  aspect-ratio: 1;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  background: var(--cmap-empty);
+  color: #fff;
+  overflow: hidden;
+}
+.cmap-cell.room {
+  background: var(--cmap-room);
+  color: #222;
+}
+.cmap-cell.own-black {
+  background: var(--cmap-black);
+  color: #fff;
+}
+.cmap-cell.own-red {
+  background: var(--cmap-red);
+  color: #fff;
+}
+.cmap-cell.contested {
+  background: linear-gradient(135deg, var(--cmap-black) 50%, var(--cmap-red) 50%);
+  color: #fff;
+}
+.cmap-cell.room.own-black,
+.cmap-cell.room.own-red,
+.cmap-cell.room.contested {
+  outline: 2px solid var(--cmap-room);
+  outline-offset: -2px;
+}
+.cmap-cell:disabled {
+  opacity: 1;
+}
+.cmap-cell.active {
+  outline: 3px solid #ffd400;
+  outline-offset: -3px;
+}
+.cmap-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+.cmap-counts {
+  display: flex;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.cmap-black {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: #000;
+  color: #fff;
+}
+.cmap-red {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: #ff6a4a;
+  color: #000;
+}
+.cmap-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.cmap-flight:not(:disabled) {
+  background: #ffd400;
+  color: #2a2000;
+}

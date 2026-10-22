@@ -21,7 +21,13 @@ function describe(meta: SaveMeta | undefined): string {
   const [black = 0, red] = meta.info.populations;
   const minutes = Math.floor(meta.info.tick / 20 / 60);
   const pops = red === undefined ? `${black} ants` : `black ${black} · red ${red}`;
-  return `${meta.info.sandbox ? 'Sandbox · ' : ''}${when} · ${minutes} min · ${pops}`;
+  const campaign = meta.info.campaign;
+  const mode = meta.info.sandbox
+    ? 'Sandbox · '
+    : campaign
+      ? `Campaign ${campaign.owned}/${campaign.patches} · `
+      : '';
+  return `${mode}${when} · ${minutes} min · ${pops}`;
 }
 
 export interface SaveMenuOptions {

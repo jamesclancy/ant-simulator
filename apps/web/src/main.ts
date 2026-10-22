@@ -16,7 +16,7 @@ import { ScentOverlay } from './scentOverlay';
 import { WorldLayer } from './worldLayer';
 import { SimClient } from './simClient';
 import { pauseWhenBackgrounded } from './lifecycle';
-import { bindSaves, hasSave, loadLatest } from './save';
+import { bindSaves, hasSave, loadLatest, type SaveSlot } from './save';
 import { mountSaveMenu } from './save/saveMenu';
 import { mountTuningPanel } from './tuningPanel';
 import { PlayerInput } from './player/input';
@@ -32,7 +32,7 @@ import { haptics } from './platform/haptics';
 import { BATTERY_SAVER_FPS, PerfGovernor } from './platform/perfGovernor';
 import { initNativeShell } from './platform/nativeShell';
 import { PROFILES, type DeviceTier, type PerfProfile } from './platform/deviceTier';
-import { Menu, type NewGameOptions } from './ui/menu';
+import { Menu, type NewCampaignOptions, type NewGameOptions } from './ui/menu';
 import type { SandboxOptions } from './sandbox/config';
 import { SandboxUi } from './sandbox/sandboxUi';
 import { sandboxConfig } from './sandbox/config';
@@ -42,6 +42,7 @@ import { bindDocumentSettings, createFpsMeter } from './ui/applySettings';
 import { TutorialPanel } from './ui/tutorialPanel';
 import { registerServiceWorker } from './pwa';
 import { bindMuteButton, createAudio, type DirectorContext } from './audio';
+import { CampaignUi, latestCampaignSlot } from './campaign';
 
 const SURFACE_BACKGROUND = 0x1b2a1b;
 /** Underground ant tints (index = colony): light so they read against dark tunnels. */
@@ -125,7 +126,12 @@ async function main(): Promise<void> {
   let backdropFrozen = false;
   let rockCount = 0;
   let pendingTutorial = false;
-  let lastConfig: { seed: number; difficulty: Difficulty; sandbox?: SandboxOptions } = {
+  let lastConfig: {
+    seed: number;
+    difficulty: Difficulty;
+    sandbox?: SandboxOptions;
+    campaign?: boolean;
+  } = {
     seed: 0,
     difficulty,
   };
@@ -238,8 +244,9 @@ async function main(): Promise<void> {
     });
   }
   const sim = new SimClient({
-    onReady(config, tuning) {
+    onReady(config, tuning, campaignInfo) {
       game = buildScene(config);
+      campaign.attach(world, config, campaignInfo);
       rockCount = 0;
       sandbox.attachScene();
       sandbox.setGame(config, tuning);
@@ -271,6 +278,7 @@ async function main(): Promise<void> {
       if (simMs !== undefined) governor.reportSim(simMs);
       if (mode === 'playing') buzzIfAttacked(snapshot);
       g.worldLayer.update(snapshot);
+      campaign.onSnapshot(snapshot);
       if (snapshot.obstacles) {
         g.rocks.update(snapshot.obstacles);
         rockCount = snapshot.obstacles.length;
@@ -609,16 +617,37 @@ async function main(): Promise<void> {
     setPausedUi(true);
     again.focus();
   };
+  const campaign = new CampaignUi({
+    send: (action) => sim.campaignAction(action),
+    toast: (msg) => playerInput.toast(msg),
+    setPaused: (p) => {
+      setPausedUi(p);
+      sim.setPaused(p);
+    },
+    onOver: (won, heading, body) => {
+      if (!game || game.over) return;
+      game.over = true;
+      tutorial.stop(true);
+      title.textContent = heading;
+      text.textContent = body;
+      modal.className = won ? 'win' : 'lose';
+      modal.hidden = false;
+      setPausedUi(true);
+      again.focus();
+    },
+  });
   function hideGameOver(): void {
     modal.hidden = true;
   }
   again.addEventListener('click', () =>
-    startGame({
-      difficulty: lastConfig.difficulty,
-      seed: undefined,
-      tutorial: false,
-      ...(lastConfig.sandbox ? { sandbox: lastConfig.sandbox } : {}),
-    }),
+    lastConfig.campaign
+      ? startCampaign({ difficulty: lastConfig.difficulty, seed: undefined })
+      : startGame({
+          difficulty: lastConfig.difficulty,
+          seed: undefined,
+          tutorial: false,
+          ...(lastConfig.sandbox ? { sandbox: lastConfig.sandbox } : {}),
+        }),
   );
 
   /** ?debug: buttons to provoke fights and raids without waiting. */
@@ -703,13 +732,16 @@ async function main(): Promise<void> {
     onNewGame: (options) => startGame(options),
     onResume: () => resume(),
     onRestart: () =>
-      startGame({
-        difficulty: lastConfig.difficulty,
-        seed: lastConfig.seed,
-        tutorial: false,
-        ...(lastConfig.sandbox ? { sandbox: lastConfig.sandbox } : {}),
-      }),
+      lastConfig.campaign
+        ? startCampaign({ difficulty: lastConfig.difficulty, seed: lastConfig.seed })
+        : startGame({
+            difficulty: lastConfig.difficulty,
+            seed: lastConfig.seed,
+            tutorial: false,
+            ...(lastConfig.sandbox ? { sandbox: lastConfig.sandbox } : {}),
+          }),
     onQuit: () => startBackdrop(),
+    onNewCampaign: (options) => startCampaign(options),
     onReplayTutorial: () => {
       if (mode === 'menu') {
         startGame({ difficulty: lastConfig.difficulty, seed: undefined, tutorial: true });
@@ -722,6 +754,13 @@ async function main(): Promise<void> {
   // Continue is offered whenever any save (autosave or manual) exists.
   const refreshContinue = (): void => {
     void hasSave().then((any) => menu.setContinue(any ? continueGame : null));
+    void saves
+      .list()
+      .then((metas) => {
+        const slot = latestCampaignSlot(metas);
+        menu.setCampaignContinue(slot ? () => continueCampaign(slot) : null);
+      })
+      .catch(() => menu.setCampaignContinue(null));
   };
 
   const syncMenuClasses = (): void => {
@@ -754,6 +793,52 @@ async function main(): Promise<void> {
     sim.setSpeed(speed);
     playerInput.setFollow(settings.value.followCamera);
     setScent(settings.value.scentVision);
+  }
+
+  /** Start a new campaign: the start patch in detail, the yard map behind it. */
+  function startCampaign(options: NewCampaignOptions): void {
+    mode = 'playing';
+    lastConfig = {
+      seed: options.seed ?? randomSeed(),
+      difficulty: options.difficulty,
+      campaign: true,
+    };
+    menu.close();
+    syncMenuClasses();
+    tutorial.stop();
+    pendingTutorial = false;
+    latest = null;
+    hideGameOver();
+    setPausedUi(false);
+    sim.initCampaign({
+      seed: lastConfig.seed,
+      difficulty: lastConfig.difficulty,
+      maxAnts: governor.maxAnts,
+    });
+    sim.setPaused(false);
+    sim.setSpeed(speed);
+    playerInput.setFollow(settings.value.followCamera);
+    setScent(settings.value.scentVision);
+  }
+
+  /** Resume the newest campaign save. */
+  function continueCampaign(slot: SaveSlot): void {
+    mode = 'playing';
+    menu.close();
+    syncMenuClasses();
+    tutorial.stop();
+    pendingTutorial = false;
+    hideGameOver();
+    setPausedUi(false);
+    sim.setPaused(false);
+    playerInput.setFollow(settings.value.followCamera);
+    setScent(settings.value.scentVision);
+    saves
+      .load(slot)
+      .then((ok) => {
+        if (!ok) startBackdrop();
+      })
+      .catch(() => startBackdrop());
   }
 
   /** Resume the most recent save. */
@@ -809,7 +894,9 @@ async function main(): Promise<void> {
 
   /** Esc / Android back: up a menu level, or open the pause menu during play. */
   const handleBack = (native: boolean): void => {
-    if (menu.isOpen) {
+    if (campaign.mapOpen) {
+      campaign.closeMap();
+    } else if (menu.isOpen) {
       if (!menu.back() && native) void App.exitApp().catch(() => {});
       syncMenuClasses();
     } else if (mode === 'playing' && modal.hidden) {
@@ -862,6 +949,14 @@ async function main(): Promise<void> {
         rocks: rockCount,
         speed,
         audio: audio.backend.debugState(),
+        campaign: campaign.state && {
+          active: campaign.state.active,
+          owned: campaign.state.owned,
+          breeders: campaign.state.breeders,
+          mapOpen: campaign.mapOpen,
+          feet: campaign.feetCount,
+          kind: campaign.state.patches[campaign.state.active]?.kind ?? 'yard',
+        },
       }),
       send: (commands) => sim.sendCommands(commands),
     };

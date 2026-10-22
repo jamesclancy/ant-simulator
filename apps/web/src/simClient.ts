@@ -1,4 +1,7 @@
 import type {
+  CampaignAction,
+  CampaignConfig,
+  CampaignSnapshot,
   Command,
   SandboxTuning,
   SaveInfo,
@@ -10,7 +13,7 @@ import type {
 } from '@ant/shared';
 
 export interface SimClientEvents {
-  onReady(config: SimConfig, tuning?: SandboxTuning): void;
+  onReady(config: SimConfig, tuning?: SandboxTuning, campaign?: CampaignSnapshot): void;
   onSnapshot(snapshot: Snapshot, speed: number, simMs?: number): void;
 }
 
@@ -38,7 +41,7 @@ export class SimClient {
       const msg = e.data;
       switch (msg.type) {
         case 'ready':
-          events.onReady(msg.config, msg.tuning);
+          events.onReady(msg.config, msg.tuning, msg.campaign);
           if (msg.requestId !== undefined) this.settle(msg.requestId, msg.config);
           break;
         case 'snapshot':
@@ -84,6 +87,13 @@ export class SimClient {
 
   init(config: SimConfigInput = {}): void {
     this.send({ type: 'init', config });
+  }
+  /** Start a new campaign (replaces the running game). */
+  initCampaign(config: CampaignConfig): void {
+    this.send({ type: 'initCampaign', config });
+  }
+  campaignAction(action: CampaignAction): void {
+    this.send({ type: 'campaign', action });
   }
   sendCommands(commands: Command[]): void {
     this.send({ type: 'commands', commands });

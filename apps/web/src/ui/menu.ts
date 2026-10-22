@@ -22,6 +22,13 @@ export interface NewGameOptions {
   sandbox?: SandboxOptions;
 }
 
+/** Main menu → Campaign → New campaign. */
+export interface NewCampaignOptions {
+  difficulty: Difficulty;
+  /** Undefined = pick a random seed. */
+  seed: number | undefined;
+}
+
 export interface MenuOptions {
   settings: SettingsStore;
   difficulty: Difficulty;
@@ -30,9 +37,10 @@ export interface MenuOptions {
   onRestart(): void;
   onQuit(): void;
   onReplayTutorial(): void;
+  onNewCampaign?(options: NewCampaignOptions): void;
 }
 
-type Screen = 'main' | 'newGame' | 'sandbox' | 'settings' | 'howTo' | 'pause';
+type Screen = 'main' | 'newGame' | 'campaign' | 'sandbox' | 'settings' | 'howTo' | 'pause';
 
 /** Parse the seed field: blank = random; digits only, capped to a positive 31-bit int. */
 export function parseSeed(text: string): number | undefined | null {
@@ -59,6 +67,7 @@ export class Menu {
   private screens: Screen[] = [];
   private returnFocus: HTMLElement | null = null;
   private continueHandler: (() => void) | null = null;
+  private campaignContinue: (() => void) | null = null;
   private difficulty: Difficulty;
   private settingsSync: (() => void) | null = null;
   /** Sandbox setup choices, kept while the menu lives. */
@@ -80,6 +89,12 @@ export class Menu {
   setContinue(handler: (() => void) | null): void {
     this.continueHandler = handler;
     if (this.isOpen && this.screens[this.screens.length - 1] === 'main') this.render();
+  }
+
+  /** Show or hide "Continue campaign" on the Campaign screen. */
+  setCampaignContinue(handler: (() => void) | null): void {
+    this.campaignContinue = handler;
+    if (this.isOpen && this.screens[this.screens.length - 1] === 'campaign') this.render();
   }
 
   showMain(): void {
@@ -139,11 +154,13 @@ export class Menu {
           ? this.pauseScreen()
           : screen === 'newGame'
             ? this.newGameScreen()
-            : screen === 'sandbox'
-              ? this.sandboxScreen()
-              : screen === 'settings'
-                ? this.settingsScreen()
-                : this.howToScreen();
+            : screen === 'campaign'
+              ? this.campaignScreen()
+              : screen === 'sandbox'
+                ? this.sandboxScreen()
+                : screen === 'settings'
+                  ? this.settingsScreen()
+                  : this.howToScreen();
     this.panel.replaceChildren(...body.nodes);
     this.panel.setAttribute('aria-labelledby', 'menu-title');
     this.root.dataset.screen = screen;
@@ -178,6 +195,7 @@ export class Menu {
     }
     list.append(
       newGame,
+      this.button('Campaign', () => this.push('campaign')),
       this.button('Sandbox', () => this.push('sandbox')),
       this.button('Settings', () => this.push('settings')),
       this.button('How to Play', () => this.push('howTo')),
@@ -284,6 +302,78 @@ export class Menu {
         h('div', { class: 'menu-list' }, start, this.backButton()),
       ],
       focus: buttons.find((b) => b.d.value === this.difficulty)!.b,
+    };
+  }
+
+  private campaignScreen(): { nodes: Node[]; focus?: HTMLElement } {
+    const group = h('div', { class: 'segmented', role: 'group', 'aria-label': 'Difficulty' });
+    const hint = h('p', { class: 'menu-hint', 'aria-live': 'polite' });
+    const buttons = DIFFICULTIES.map((d) => {
+      const b = h('button', { type: 'button', class: 'seg-btn' }, d.label);
+      b.addEventListener('click', () => {
+        this.difficulty = d.value;
+        sync();
+      });
+      group.append(b);
+      return { d, b };
+    });
+    const sync = (): void => {
+      for (const { d, b } of buttons)
+        b.setAttribute('aria-pressed', String(d.value === this.difficulty));
+      hint.textContent = DIFFICULTIES.find((d) => d.value === this.difficulty)!.hint;
+    };
+    sync();
+    const seed = h('input', {
+      id: 'campaign-seed',
+      type: 'text',
+      inputmode: 'numeric',
+      autocomplete: 'off',
+      placeholder: 'Random',
+      maxlength: '10',
+    });
+    const seedHelp = h('p', { class: 'menu-hint', role: 'status' });
+    const start = this.button(
+      'New campaign',
+      () => {
+        const parsed = parseSeed(seed.value);
+        if (parsed === null) {
+          seedHelp.textContent = 'Seed must be a whole number.';
+          seed.focus();
+          return;
+        }
+        this.opts.onNewCampaign?.({ difficulty: this.difficulty, seed: parsed });
+      },
+      'primary',
+    );
+    const list = h('div', { class: 'menu-list' });
+    if (this.campaignContinue) {
+      const handler = this.campaignContinue;
+      list.append(this.button('Continue campaign', () => handler(), 'primary'));
+    }
+    list.append(start, this.backButton());
+    return {
+      nodes: [
+        this.title(
+          'Campaign',
+          'Spread across the yard with mating flights, then drive the humans out of the house.',
+        ),
+        h(
+          'div',
+          { class: 'menu-form' },
+          h('span', { class: 'menu-label' }, 'Difficulty'),
+          group,
+          hint,
+        ),
+        h(
+          'div',
+          { class: 'menu-form' },
+          h('label', { class: 'menu-label', for: 'campaign-seed' }, 'Seed'),
+          seed,
+          seedHelp,
+        ),
+        list,
+      ],
+      focus: (list.firstElementChild as HTMLElement | null) ?? start,
     };
   }
 

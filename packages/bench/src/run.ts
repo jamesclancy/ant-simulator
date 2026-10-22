@@ -1,5 +1,5 @@
 import { Caste, PHEROMONE_TYPES } from '@ant/shared';
-import { PheromoneField, createSim } from '@ant/sim';
+import { Campaign, PheromoneField, abstractTick, buildLayout, createSim } from '@ant/sim';
 import type { Sim } from '@ant/sim';
 
 // Usage: bench [antCounts=5000,10000] [ticks=400]
@@ -136,4 +136,56 @@ for (const ants of counts) {
     );
     report(samples, sim);
   }
+}
+
+// Campaign: the abstract model over all 54 patches (every one holding both colonies, the
+// worst case), and the cost of switching the detailed patch (collapse + build).
+{
+  const defs = buildLayout(1);
+  const patches = defs.map(() => ({
+    food: 3000,
+    black: { pop: 300, breeders: 10, food: 100 },
+    red: { pop: 300, breeders: 10, food: 100 },
+  }));
+  const ctx = {
+    defs,
+    patches,
+    difficulty: 'normal' as const,
+    blackBreederShare: 0.12,
+    active: -1,
+    indoor: 0,
+    destroyed: [],
+  };
+  const n = 2000;
+  const t0 = performance.now();
+  for (let i = 0; i < n; i++) {
+    for (const p of patches) {
+      p.black ??= { pop: 300, breeders: 10, food: 100 };
+      p.red ??= { pop: 300, breeders: 10, food: 100 };
+    }
+    abstractTick(ctx);
+  }
+  const tickMs = (performance.now() - t0) / n;
+  console.log(
+    `campaign abstract tick (${patches.length} patches): ${tickMs.toFixed(4)}ms per tick = ${(tickMs / 100).toFixed(5)}ms per sim tick (runs every 100)`,
+  );
+
+  const campaign = new Campaign({ seed: 1, difficulty: 'normal' });
+  const st = campaign.getState();
+  const target = st.active + 2;
+  st.patches[target]!.black = { pop: 600, breeders: 20, food: 300 };
+  st.patches[target]!.red = { pop: 600, breeders: 0, food: 300 };
+  campaign.setState(st);
+  for (let i = 0; i < 200; i++) campaign.step();
+  const switches: number[] = [];
+  for (let i = 0; i < 20; i++) {
+    const s0 = performance.now();
+    campaign.enter(i % 2 ? st.active : target);
+    switches.push(performance.now() - s0);
+    for (let k = 0; k < 20; k++) campaign.step();
+  }
+  switches.sort((a, b) => a - b);
+  console.log(
+    `campaign patch switch (600 vs 600 ants): p50=${switches[10]!.toFixed(2)}ms max=${switches[19]!.toFixed(2)}ms (budget: < 1000ms)`,
+  );
 }
