@@ -81,7 +81,10 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 export function encodeReplay(data: ReplayData): Uint8Array {
-  const { version: _version, base, ...body } = data;
+  const body: Partial<ReplayData> = { ...data };
+  delete body.version;
+  delete body.base;
+  const base = data.base;
   const json = deflateSync(encoder.encode(JSON.stringify(body)), { level: 9 });
   const baseLen = base?.byteLength ?? 0;
   const out = new Uint8Array(12 + baseLen + json.byteLength);

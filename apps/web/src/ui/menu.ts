@@ -33,6 +33,24 @@ export interface NewCampaignOptions {
   seed: number | undefined;
 }
 
+/** Handed to a `MenuEntry` so a feature module can build its own menu screen. */
+export interface MenuScreenContext {
+  title(text: string, subtitle?: string): HTMLElement;
+  button(label: string, onClick: () => void, cls?: string): HTMLButtonElement;
+  /** Up one level. */
+  back(): void;
+  /** Redraw this screen (call `build` again). */
+  rerender(): void;
+  /** Close the menu (e.g. after starting a game from it). */
+  close(): void;
+}
+
+/** A main-menu button that opens a screen built by another module (Daily Challenge, Replays). */
+export interface MenuEntry {
+  label: string;
+  build(ctx: MenuScreenContext): { nodes: Node[]; focus?: HTMLElement };
+}
+
 export interface MenuOptions {
   settings: SettingsStore;
   difficulty: Difficulty;
@@ -42,9 +60,12 @@ export interface MenuOptions {
   onQuit(): void;
   onReplayTutorial(): void;
   onNewCampaign?(options: NewCampaignOptions): void;
+  /** Extra main-menu screens, listed after Sandbox. */
+  entries?: readonly MenuEntry[];
 }
 
-type Screen = 'main' | 'newGame' | 'campaign' | 'sandbox' | 'settings' | 'howTo' | 'pause';
+type Screen =
+  'main' | 'newGame' | 'campaign' | 'sandbox' | 'settings' | 'howTo' | 'pause' | `entry:${number}`;
 
 /** Parse the seed field: blank = random; digits only, capped to a positive 31-bit int. */
 export function parseSeed(text: string): number | undefined | null {
@@ -151,8 +172,12 @@ export class Menu {
   private render(): void {
     const screen = this.screens[this.screens.length - 1]!;
     this.settingsSync = null;
-    const body =
-      screen === 'main'
+    const entry = screen.startsWith('entry:')
+      ? this.opts.entries?.[Number(screen.slice(6))]
+      : undefined;
+    const body = entry
+      ? entry.build(this.screenContext())
+      : screen === 'main'
         ? this.mainScreen()
         : screen === 'pause'
           ? this.pauseScreen()
@@ -169,6 +194,18 @@ export class Menu {
     this.panel.setAttribute('aria-labelledby', 'menu-title');
     this.root.dataset.screen = screen;
     (body.focus ?? focusables(this.panel)[0])?.focus();
+  }
+
+  private screenContext(): MenuScreenContext {
+    return {
+      title: (text, subtitle) => this.title(text, subtitle),
+      button: (label, onClick, cls) => this.button(label, onClick, cls),
+      back: () => {
+        this.back();
+      },
+      rerender: () => this.render(),
+      close: () => this.close(),
+    };
   }
 
   private title(text: string, subtitle?: string): HTMLElement {
@@ -201,6 +238,9 @@ export class Menu {
       newGame,
       this.button('Campaign', () => this.push('campaign')),
       this.button('Sandbox', () => this.push('sandbox')),
+      ...(this.opts.entries ?? []).map((entry, i) =>
+        this.button(entry.label, () => this.push(`entry:${i}`)),
+      ),
       this.button('Settings', () => this.push('settings')),
       this.button('How to Play', () => this.push('howTo')),
     );

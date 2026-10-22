@@ -206,7 +206,7 @@ describe('replay', () => {
     const { bytes } = record(small, {}, 30);
     expect(() => decodeReplay(bytes.subarray(0, 20))).toThrow(ReplayError);
     const bad = bytes.slice();
-    bad[bad.length - 5] ^= 0xff;
+    bad[bad.length - 5] = (bad[bad.length - 5] ?? 0) ^ 0xff;
     expect(() => decodeReplay(bad)).toThrow(ReplayError);
   });
 });

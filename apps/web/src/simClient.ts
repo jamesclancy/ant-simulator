@@ -7,14 +7,24 @@ import type {
   SaveInfo,
   SimConfig,
   SimConfigInput,
+  ReplayStart,
   Snapshot,
   WorkerInMessage,
   WorkerOutMessage,
 } from '@ant/shared';
 
 export interface SimClientEvents {
-  onReady(config: SimConfig, tuning?: SandboxTuning, campaign?: CampaignSnapshot): void;
+  onReady(
+    config: SimConfig,
+    tuning?: SandboxTuning,
+    campaign?: CampaignSnapshot,
+    replay?: ReplayStart,
+  ): void;
   onSnapshot(snapshot: Snapshot, speed: number, simMs?: number): void;
+  /** Replay viewer: a seek is in progress or finished. */
+  onReplayStatus?(tick: number, target: number, seeking: boolean): void;
+  /** Replay viewer: the re-run stopped matching the recording. */
+  onReplayDesync?(tick: number, expected: number, actual: number): void;
 }
 
 /** A `save` / `load` the worker rejected; `code` is `SaveError.code` or 'failed'. */
@@ -41,7 +51,7 @@ export class SimClient {
       const msg = e.data;
       switch (msg.type) {
         case 'ready':
-          events.onReady(msg.config, msg.tuning, msg.campaign);
+          events.onReady(msg.config, msg.tuning, msg.campaign, msg.replay);
           if (msg.requestId !== undefined) this.settle(msg.requestId, msg.config);
           break;
         case 'snapshot':
@@ -49,6 +59,15 @@ export class SimClient {
           break;
         case 'saved':
           this.settle(msg.requestId, { bytes: msg.bytes, info: msg.info });
+          break;
+        case 'replay':
+          this.settle(msg.requestId, msg.bytes);
+          break;
+        case 'replayStatus':
+          events.onReplayStatus?.(msg.tick, msg.target, msg.seeking);
+          break;
+        case 'replayDesync':
+          events.onReplayDesync?.(msg.tick, msg.expected, msg.actual);
           break;
         case 'error':
           this.requests.get(msg.requestId)?.reject(new SimRequestError(msg.code, msg.message));
@@ -85,8 +104,19 @@ export class SimClient {
     this.worker.postMessage(msg);
   }
 
-  init(config: SimConfigInput = {}): void {
-    this.send({ type: 'init', config });
+  init(config: SimConfigInput = {}, options: { record?: boolean; daily?: string } = {}): void {
+    this.send({ type: 'init', config, ...options });
+  }
+  /** The running game's replay file (rejects when nothing is being recorded). */
+  getReplay(): Promise<Uint8Array> {
+    return this.request((requestId) => ({ type: 'getReplay', requestId }));
+  }
+  /** Replace the running game with a replay viewer; resolves once it is running. */
+  initReplay(bytes: Uint8Array): Promise<SimConfig> {
+    return this.request((requestId) => ({ type: 'initReplay', requestId, bytes }), [bytes.buffer]);
+  }
+  replaySeek(tick: number): void {
+    this.send({ type: 'replaySeek', tick });
   }
   /** Start a new campaign (replaces the running game). */
   initCampaign(config: CampaignConfig): void {

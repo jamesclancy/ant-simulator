@@ -108,7 +108,7 @@ export function runSimWorker(scope: WorkerScope): void {
   const seekSlice = (): void => {
     if (!replay || seekTarget === null) return;
     const target = seekTarget;
-    let reached = false;
+    let reached: boolean;
     try {
       reached = replay.advanceTo(target, now() + 25);
     } catch (e) {
