@@ -90,6 +90,16 @@ const scenarios: { name: string; config: SimConfigInput; schedule: Schedule; tic
     },
   },
   {
+    name: 'a lawnmower pass and yard footsteps',
+    config: { ...small, spiders: 0, antlions: 0 },
+    ticks: 1200,
+    schedule: {
+      20: [{ type: 'startMower', passes: 2 }],
+      60: [{ type: 'spawnAnts', count: 40, x: 1000, y: 1000, colony: 0 }],
+      500: [{ type: 'startYardSteps' }, { type: 'playerMoveTo', x: 1000, y: 1000 }],
+    },
+  },
+  {
     name: 'hazards',
     config: { ...small, spiders: 2, antlions: 3 },
     ticks: 900,
