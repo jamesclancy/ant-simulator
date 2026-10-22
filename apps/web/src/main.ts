@@ -1,4 +1,4 @@
-import { Application, Container, Graphics } from 'pixi.js';
+import { Application, Container } from 'pixi.js';
 import type { Difficulty, SimConfig, Snapshot } from '@ant/shared';
 import {
   ANT_FLAGS_OFFSET,
@@ -11,6 +11,9 @@ import {
   flagFighting,
 } from '@ant/shared';
 import { AntLayer } from './antLayer';
+import { Art } from './art';
+import { bindPaletteCss } from './art/applyPalette';
+import { GroundLayer } from './art/ground';
 import { Camera } from './camera';
 import { ScentOverlay } from './scentOverlay';
 import { WorldLayer } from './worldLayer';
@@ -41,13 +44,12 @@ import { SettingsStore } from './ui/settings';
 import { bindDocumentSettings, createFpsMeter } from './ui/applySettings';
 import { TutorialPanel } from './ui/tutorialPanel';
 import { registerServiceWorker } from './pwa';
+// Last, so the retro theme overrides every panel's own stylesheet.
+import './ui/theme.css';
 import { bindMuteButton, createAudio, type DirectorContext } from './audio';
 import { CampaignUi, latestCampaignSlot } from './campaign';
 
-const SURFACE_BACKGROUND = 0x1b2a1b;
-/** Underground ant tints (index = colony): light so they read against dark tunnels. */
-const NEST_TINTS = [0xd9c7a5, 0xff6a4a];
-const NEST_FIGHT_TINTS = [0xffffff, 0xffd0a0];
+const SURFACE_BACKGROUND = 0x4d7a35;
 /** Game ticks (20 per second) between autosaves: 60 s of game time. */
 const AUTOSAVE_TICKS = 60 * 20;
 const COLONY_NAMES = ['black', 'red'];
@@ -63,6 +65,7 @@ const randomSeed = (): number => (Math.random() * 0x7fffffff) | 0;
 
 /** Display objects that belong to one sim session (rebuilt on every new game). */
 interface Scene {
+  ground: GroundLayer;
   scent: ScentOverlay;
   worldLayer: WorldLayer;
   rocks: ObstacleLayer;
@@ -113,10 +116,14 @@ async function main(): Promise<void> {
   app.stage.addChild(nestRoot);
   const nestCamera = new Camera(nestRoot, host);
   nestCamera.enabled = false;
-  const weather = new WeatherLayer(app.stage, app.screen);
   const settings = new SettingsStore();
   await settings.load();
   bindDocumentSettings(settings);
+  const art = new Art(settings.value.palette);
+  bindPaletteCss(art);
+  const weather = new WeatherLayer(app.stage, app.screen, art);
+  camera.pixelRatio = app.renderer.resolution;
+  nestCamera.pixelRatio = app.renderer.resolution;
   const fps = createFpsMeter();
   haptics.enabled = settings.value.haptics;
   const audio = createAudio(settings);
@@ -173,40 +180,35 @@ async function main(): Promise<void> {
   const buildScene = (config: SimConfig): Scene => {
     for (const child of world.removeChildren()) child.destroy({ children: true });
     for (const child of nestRoot.removeChildren()) child.destroy({ children: true });
-    const bg = new Graphics();
-    bg.rect(0, 0, config.worldSize, config.worldSize).fill(0x2f4a2a);
-    for (let i = 0; i <= config.worldSize; i += 128) {
-      bg.moveTo(i, 0).lineTo(i, config.worldSize).moveTo(0, i).lineTo(config.worldSize, i);
-    }
-    bg.stroke({ color: 0x3d5c36, width: 1 });
-    world.addChild(bg);
-    const scent = new ScentOverlay(world, config.worldSize);
+    const ground = new GroundLayer(art, config.worldSize, config.seed, []);
+    world.addChild(ground.view);
+    const scent = new ScentOverlay(world, config.worldSize, art);
     scent.setVisible(scentOn);
     scent.minIntervalMs = profile.scentIntervalMs;
-    const worldLayer = new WorldLayer(world);
-    const rocks = new ObstacleLayer(world);
+    const worldLayer = new WorldLayer(world, art);
+    const rocks = new ObstacleLayer(world, art);
     const mounds: DirtMound[] = [];
-    for (let c = 0; c < config.colonies; c++) mounds.push(new DirtMound(world, c));
-    const ants = new AntLayer(app.renderer, world, { layer: 0 });
-    const spiders = new SpiderLayer(world);
+    for (let c = 0; c < config.colonies; c++) mounds.push(new DirtMound(world, c, art));
+    const ants = new AntLayer(art, world, { layer: 0 });
+    const spiders = new SpiderLayer(world, art);
     // Pits are ground texture: just above the grass, below everything that walks on it.
-    const antlions = new AntlionLayer(world);
+    const antlions = new AntlionLayer(world, art);
     world.addChildAt(antlions.view, 1);
     antlions.setReduceMotion(settings.value.reduceMotion);
     const nests = [];
     for (let c = 0; c < config.colonies; c++) {
-      const view = new NestView(c);
+      const view = new NestView(c, art);
       nestRoot.addChild(view.view);
-      const nestAnts = new AntLayer(app.renderer, view.antParent, {
+      const nestAnts = new AntLayer(art, view.antParent, {
         layer: 1 + c,
-        scale: 0.75,
-        tints: NEST_TINTS,
-        fightTints: NEST_FIGHT_TINTS,
+        scale: 1,
+        set: 'nest',
       });
       nests.push({ view, ants: nestAnts, framed: false });
     }
-    const marker = new PlayerMarker(world);
+    const marker = new PlayerMarker(world, art);
     return {
+      ground,
       scent,
       worldLayer,
       rocks,
@@ -222,6 +224,7 @@ async function main(): Promise<void> {
     };
   };
 
+  let renderedFrames = 0;
   // ?debug: perf probe for device-throttling runs (see docs/PERF.md).
   if (debug) {
     Object.assign(window, {
@@ -231,7 +234,17 @@ async function main(): Promise<void> {
         tier: profile.tier,
         ants: latest?.antCount ?? 0,
         zoom: camera.zoom,
+        frames: renderedFrames,
+        nests: latest?.colonies.map((c) => c.nest) ?? [],
+        spiders: latest?.spiders.map((sp) => ({ x: sp.x, y: sp.y })) ?? [],
+        antlions: latest?.antlions.map((a) => ({ x: a.x, y: a.y })) ?? [],
       }),
+      __antFocus: (x: number, y: number, z: number) => {
+        playerInput.setFollow(false);
+        camera.focus(x, y, z);
+      },
+      __antLayer: (l: 0 | 1) => setLayer(l),
+      __antAtlas: () => art.atlas.canvas.toDataURL(),
       __antSpawn: (n: number) => {
         for (const c of latest?.colonies ?? []) {
           sim.sendCommands([
@@ -266,7 +279,7 @@ async function main(): Promise<void> {
         colonyPanel = new ColonyPanel(document.body, (cmds) => sim.sendCommands(cmds));
       }
       colonyPanel.reset();
-      camera.focus(config.worldSize / 2, config.worldSize / 2, 1.5);
+      camera.focus(config.worldSize / 2, config.worldSize / 2, 1);
       if (debug && !tuningMounted) {
         tuningMounted = true;
         mountWarControls(mountTuningPanel(sim, config.behavior));
@@ -315,7 +328,7 @@ async function main(): Promise<void> {
       if (!g.focused) {
         g.focused = true;
         const home = snapshot.colonies[PLAYER_COLONY]!.nest;
-        camera.focus(home.x, home.y, 1.5);
+        camera.focus(home.x, home.y, 1);
       }
       latest = snapshot;
       audio.director.onSnapshot(snapshot, audioContext());
@@ -403,12 +416,26 @@ async function main(): Promise<void> {
   });
 
   app.ticker.add(() => {
+    renderedFrames++;
     fps.tick(app.ticker.FPS, governor.simMs);
     governor.frame(performance.now(), document.hidden || mode === 'menu');
     weather.setReduceMotion(settings.value.reduceMotion);
     weather.tick(app.ticker.deltaMS);
     const g = game;
     if (!g) return;
+    const reduce = settings.value.reduceMotion;
+    const now = performance.now();
+    g.ground.setWetness(weather.intensity);
+    g.ants.setAnimation(now, !reduce);
+    g.marker.setReduceMotion(reduce);
+    g.spiders.setReduceMotion(reduce);
+    for (const n of g.nests) {
+      n.ants.setAnimation(now, !reduce);
+      n.view.setReduceMotion(reduce);
+      n.view.tick(now);
+    }
+    camera.snapToPixels();
+    nestCamera.snapToPixels();
     if (mode === 'menu') {
       // Slow drift around the home nest behind the menu.
       const nest = latest?.colonies[PLAYER_COLONY]?.nest;
@@ -687,7 +714,7 @@ async function main(): Promise<void> {
     });
     add('Look at spider', (s) => {
       const sp = s.spiders.find((k) => k.hp > 0);
-      if (sp) camera.focus(sp.x, sp.y, 1.5);
+      if (sp) camera.focus(sp.x, sp.y, 1);
     });
     add('Start rain', () => sim.sendCommands([{ type: 'startRain', ticks: 900 }]));
     add('Add antlion pit (+6 ants)', (s) => {
@@ -703,7 +730,7 @@ async function main(): Promise<void> {
     });
     add('Look at pit', (s) => {
       const a = s.antlions[s.antlions.length - 1];
-      if (a) camera.focus(a.x, a.y, 1.5);
+      if (a) camera.focus(a.x, a.y, 1);
     });
     add('Red raid on', () => sim.sendCommands([{ type: 'setRaid', colony: RED_COLONY, on: true }]));
     panel.appendChild(row);
@@ -913,6 +940,7 @@ async function main(): Promise<void> {
   void App.addListener('backButton', () => handleBack(true)).catch(() => {});
 
   settings.subscribe((s, changed) => {
+    art.setMode(s.palette);
     fps.el.hidden = !s.showFps;
     haptics.enabled = s.haptics;
     app.ticker.maxFPS = s.batterySaver ? BATTERY_SAVER_FPS : 0;

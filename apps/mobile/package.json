@@ -7,7 +7,7 @@
     "sync": "cap sync",
     "typecheck": "tsc -p tsconfig.json",
     "art": "node scripts/make-placeholder-art.mjs",
-    "assets": "capacitor-assets generate --ios --android --iconBackgroundColor \"#2f4a2a\" --iconBackgroundColorDark \"#1b2a1b\" --splashBackgroundColor \"#1b2a1b\" --splashBackgroundColorDark \"#1b2a1b\""
+    "assets": "capacitor-assets generate --ios --android --iconBackgroundColor \"#3f6a2e\" --iconBackgroundColorDark \"#1d3316\" --splashBackgroundColor \"#1d3316\" --splashBackgroundColorDark \"#1d3316\""
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",

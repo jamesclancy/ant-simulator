@@ -1,43 +1,46 @@
-import { Graphics, Particle, ParticleContainer } from 'pixi.js';
-import type { Renderer, Container, Texture } from 'pixi.js';
+import { Particle, ParticleContainer } from 'pixi.js';
+import type { Container, Texture } from 'pixi.js';
 import {
   ANT_FLAGS_OFFSET,
   ANT_LAYER_OFFSET,
   ANT_STRIDE,
-  Caste,
   TICK_MS,
   flagCaste,
   flagColony,
   flagFighting,
 } from '@ant/shared';
 import type { Snapshot } from '@ant/shared';
+import type { Art } from './art';
+import { STATE_INDEX } from './art/sprites/ants';
+import type { AntSet } from './art/sprites/ants';
+import { SURFACE_PX } from './art/sprites/world';
 
 export interface AntLayerOptions {
   /** Which layer's ants to show: 0 surface (default), `1 + c` inside colony c's nest. */
   layer?: number;
-  /** Ant sprite scale. */
+  /** World units per art pixel. */
   scale?: number;
-  /** Tint per colony (index = colony id) for ants carrying nothing. */
-  tints?: readonly number[];
-  /** Tint per colony while fighting. */
-  fightTints?: readonly number[];
+  /** Which sprite set to use: surface ants have dark rims, nest ants light ones. */
+  set?: AntSet;
 }
 
-const FOOD_TINT = 0xffc21a;
-const DIRT_TINT = 0x9c6b3a;
-/** Black colony (player's) and red colony on the surface. */
-export const SURFACE_TINTS = [0x151515, 0xc8321e] as const;
-export const SURFACE_FIGHT_TINTS = [0x5a3a3a, 0xff8040] as const;
-/** Soldiers are drawn this much bigger than workers. */
-const SOLDIER_SCALE = 1.35;
+/** Headings are snapped to this many directions so rotated pixel art stays crisp. */
+const HEADINGS = 16;
+const HEADING_STEP = (Math.PI * 2) / HEADINGS;
+/** Walk cycle length per frame, ms. */
+const FRAME_MS = 110;
+const RECRUIT_TINT = 0xffe08a;
 
 /**
  * Batched ant renderer for one layer (ants of other layers are hidden). Holds the previous
  * and latest snapshot and interpolates between them using wall-clock time since the latest snapshot arrived.
+ * Each ant is one particle whose texture is swapped between walk, carry and fight frames.
  */
 export class AntLayer {
   readonly view: ParticleContainer;
-  private texture: Texture;
+  private frames: Texture[][][][];
+  private clock = 0;
+  private animate = true;
   private prev: Float32Array = new Float32Array(0);
   private curr: Float32Array = new Float32Array(0);
   private currCount = 0;
@@ -55,25 +58,22 @@ export class AntLayer {
   private stride = 1;
   private layer: number;
   private scale: number;
-  private tints: readonly number[];
-  private fightTints: readonly number[];
 
-  constructor(renderer: Renderer, parent: Container, opts: AntLayerOptions = {}) {
+  constructor(art: Art, parent: Container, opts: AntLayerOptions = {}) {
     this.layer = opts.layer ?? 0;
-    this.scale = opts.scale ?? 1.5;
-    this.tints = opts.tints ?? SURFACE_TINTS;
-    this.fightTints = opts.fightTints ?? SURFACE_FIGHT_TINTS;
-    const g = new Graphics();
-    // Ant glyph pointing +x: three body segments and head.
-    g.ellipse(-5, 0, 3.5, 2.5).fill(0xffffff);
-    g.ellipse(0, 0, 2.5, 2).fill(0xdddddd);
-    g.ellipse(4.5, 0, 2.5, 2.2).fill(0xffffff);
-    this.texture = renderer.generateTexture({ target: g, resolution: 4 });
+    this.scale = opts.scale ?? SURFACE_PX;
+    this.frames = art.ants.frames[opts.set ?? 'surf'];
     this.view = new ParticleContainer({
-      // vertex: per-ant scale (soldiers are bigger) changes as slots are reused.
-      dynamicProperties: { position: true, rotation: true, vertex: true, color: true },
+      // vertex: sprite size differs per caste/frame; uvs: walk/carry/fight frames are texture swaps.
+      dynamicProperties: { position: true, rotation: true, vertex: true, uvs: true, color: true },
     });
     parent.addChild(this.view);
+  }
+
+  /** Drive the walk cycle from the frame clock; off (reduce motion) shows the standing pose. */
+  setAnimation(now: number, animate: boolean): void {
+    this.clock = now;
+    this.animate = animate;
   }
 
   setStride(stride: number): void {
@@ -107,12 +107,11 @@ export class AntLayer {
     while (this.shown < n) {
       this.view.addParticle(
         new Particle({
-          texture: this.texture,
+          texture: this.frames[0]![0]![0]![0]!,
           anchorX: 0.5,
           anchorY: 0.5,
           scaleX: this.scale,
           scaleY: this.scale,
-          tint: this.tints[0]!,
         }),
       );
       this.shown++;
@@ -147,25 +146,41 @@ export class AntLayer {
       }
       p.alpha = 1;
       // No interpolation across a layer change (positions live in different spaces).
-      if (alpha >= 1 || prev[o + ANT_LAYER_OFFSET] !== layer) {
-        p.x = cx;
-        p.y = cy;
-      } else {
-        p.x = prev[o]! + (cx - prev[o]!) * alpha;
-        p.y = prev[o + 1]! + (cy - prev[o + 1]!) * alpha;
+      let x = cx;
+      let y = cy;
+      let moving = false;
+      if (prev[o + ANT_LAYER_OFFSET] === layer && i < this.prevCount) {
+        moving = Math.abs(cx - prev[o]!) + Math.abs(cy - prev[o + 1]!) > 0.05;
+        if (alpha < 1) {
+          x = prev[o]! + (cx - prev[o]!) * alpha;
+          y = prev[o + 1]! + (cy - prev[o + 1]!) * alpha;
+        }
       }
-      p.rotation = curr[o + 2]!;
+      p.x = Math.round(x);
+      p.y = Math.round(y);
+      p.rotation = Math.round(curr[o + 2]! / HEADING_STEP) * HEADING_STEP;
       const flags = curr[o + ANT_FLAGS_OFFSET]!;
       const colony = flagColony(flags);
-      const base = this.scale * lodScale;
-      const s = flagCaste(flags) === Caste.Soldier ? base * SOLDIER_SCALE : base;
+      const s = this.scale * lodScale;
       p.scaleX = s;
       p.scaleY = s;
-      // Fighters flash; food carriers are gold, dirt carriers brown, recruits dark gold.
       const c = curr[o + 3]!;
-      if (flagFighting(flags)) p.tint = this.fightTints[colony] ?? 0xffffff;
-      else p.tint = c > 0 ? FOOD_TINT : c < 0 ? DIRT_TINT : (this.tints[colony] ?? 0xffffff);
-      if (this.recruitFlags[i]) p.tint = 0x8a6a10;
+      const fighting = flagFighting(flags);
+      const state = fighting
+        ? STATE_INDEX.fight
+        : c > 0
+          ? STATE_INDEX.food
+          : c < 0
+            ? STATE_INDEX.dirt
+            : STATE_INDEX.walk;
+      const set = this.frames[colony > 1 ? 1 : colony]![flagCaste(flags)]![state]!;
+      let f = 0;
+      if (this.animate) {
+        if (fighting) f = ((this.clock / 140 + i) | 0) % 2;
+        else if (moving) f = ((this.clock / FRAME_MS + i * 0.37) | 0) % set.length;
+      }
+      p.texture = set[f]!;
+      p.tint = this.recruitFlags[i] ? RECRUIT_TINT : 0xffffff;
     }
     this.playerPos.valid = false;
     const pi = this.playerIndex;

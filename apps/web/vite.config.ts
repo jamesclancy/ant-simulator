@@ -16,8 +16,8 @@ export default defineConfig({
         name: 'Ant Simulator',
         short_name: 'Ants',
         description: 'Rule the yard. Lead your ant colony against the red colony.',
-        theme_color: '#1b2a1b',
-        background_color: '#1b2a1b',
+        theme_color: '#1d3316',
+        background_color: '#1d3316',
         display: 'standalone',
         orientation: 'any',
         start_url: './',
@@ -35,7 +35,7 @@ export default defineConfig({
       },
       workbox: {
         // App shell plus the sim worker bundle (both live under assets/).
-        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,ttf,webmanifest}'],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,

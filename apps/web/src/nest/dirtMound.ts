@@ -1,36 +1,36 @@
-import { Graphics } from 'pixi.js';
+import { Sprite } from 'pixi.js';
 import type { Container } from 'pixi.js';
 import type { Snapshot } from '@ant/shared';
+import type { Art } from '../art';
+import { SURFACE_PX } from '../art/sprites/world';
 
 /** Surface dirt heap beside a colony's nest entrance; grows with the dirt hauled out. */
 export class DirtMound {
-  private g = new Graphics();
+  private sprite = new Sprite();
   private shown = -1;
 
   constructor(
     parent: Container,
     private colony: number,
+    private art: Art,
   ) {
-    parent.addChild(this.g);
+    this.sprite.anchor.set(0.5, 0.75);
+    this.sprite.scale.set(SURFACE_PX);
+    this.sprite.visible = false;
+    parent.addChild(this.sprite);
   }
 
   update(snapshot: Snapshot): void {
     const c = snapshot.colonies[this.colony];
     if (!c) return;
     const dirt = c.dirt;
-    const bucket = Math.floor(Math.sqrt(dirt) * 2);
-    if (bucket === this.shown) return;
-    this.shown = bucket;
+    const level = dirt <= 0 ? -1 : Math.min(4, Math.floor(Math.sqrt(dirt) / 2.2));
+    if (level === this.shown) return;
+    this.shown = level;
+    this.sprite.visible = level >= 0;
+    if (level < 0) return;
     const { x, y, radius } = c.nest;
-    const r = Math.min(radius * 1.2, 4 + bucket * 0.9);
-    this.g.clear();
-    if (dirt <= 0) return;
-    const cx = x + radius * 1.5;
-    this.g
-      .ellipse(cx, y + radius * 0.3, r * 1.3, r * 0.8)
-      .fill({ color: 0x7a5535, alpha: 0.95 })
-      .stroke({ color: 0x4a3320, width: 1 })
-      .ellipse(cx - r * 0.2, y + radius * 0.1, r * 0.7, r * 0.45)
-      .fill({ color: 0x9a7048, alpha: 0.9 });
+    this.sprite.texture = this.art.dirtHeap(level);
+    this.sprite.position.set(Math.round(x + radius * 1.9), Math.round(y + radius * 0.4));
   }
 }

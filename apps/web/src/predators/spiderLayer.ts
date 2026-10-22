@@ -1,16 +1,14 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Sprite } from 'pixi.js';
 import type { SpiderInfo, Snapshot } from '@ant/shared';
 import { SpiderState } from '@ant/shared';
+import type { Art } from '../art';
+import { SURFACE_PX } from '../art/sprites/world';
 
-const BODY = 0x2a1a2e;
-const BODY_HI = 0x4b2f55;
-const LEG = 0x1c1220;
-const EYES = 0xff4040;
-const BAR_W = 34;
+const BAR_W = 20;
 
-interface Sprite {
+interface Entry {
   root: Container;
-  legs: Graphics;
+  body: Sprite;
   bar: Graphics;
   /** Smoothed position the sprite is drawn at. */
   x: number;
@@ -28,10 +26,19 @@ interface Sprite {
  */
 export class SpiderLayer {
   readonly view = new Container();
-  private readonly sprites = new Map<number, Sprite>();
+  private readonly sprites = new Map<number, Entry>();
 
-  constructor(parent: Container) {
+  private reduceMotion = false;
+
+  constructor(
+    parent: Container,
+    private readonly art: Art,
+  ) {
     parent.addChild(this.view);
+  }
+
+  setReduceMotion(on: boolean): void {
+    this.reduceMotion = on;
   }
 
   update(snapshot: Snapshot): void {
@@ -77,62 +84,37 @@ export class SpiderLayer {
       dh = Math.atan2(Math.sin(dh), Math.cos(dh));
       sp.heading += dh * Math.min(1, k * 2);
       const moved = Math.hypot(sp.x - px, sp.y - py);
-      sp.phase += moved * 0.35;
+      sp.phase += moved * 0.18;
       sp.root.position.set(sp.x, sp.y);
-      sp.root.rotation = sp.heading;
-      this.drawLegs(sp.legs, sp.phase, moved > 0.05, t.state);
+      sp.body.rotation = Math.round(sp.heading / (Math.PI / 8)) * (Math.PI / 8);
+      const crouched = t.state === SpiderState.Lurk || t.state === SpiderState.Eat;
+      const walk = this.art.spider.walk;
+      sp.body.texture = crouched
+        ? this.art.spider.crouch
+        : walk[this.reduceMotion || moved < 0.05 ? 0 : Math.floor(sp.phase) % walk.length]!;
       this.drawBar(sp.bar, t, sp.heading);
     }
   }
 
-  private create(s: SpiderInfo): Sprite {
+  private create(s: SpiderInfo): Entry {
     const root = new Container();
-    const legs = new Graphics();
-    const body = new Graphics();
-    // Abdomen behind, head/thorax in front (the spider faces +x).
-    body.ellipse(-9, 0, 11, 8.5).fill(BODY).stroke({ color: BODY_HI, width: 1 });
-    body.ellipse(-10, 0, 5, 3.5).fill({ color: BODY_HI, alpha: 0.7 });
-    body.ellipse(5, 0, 7, 6).fill(BODY).stroke({ color: BODY_HI, width: 1 });
-    body.circle(10, -2.2, 1.3).fill(EYES).circle(10, 2.2, 1.3).fill(EYES);
+    const body = new Sprite(this.art.spider.walk[0]);
+    body.anchor.set(0.5);
     const bar = new Graphics();
     // The bar must not rotate with the spider: it is drawn counter-rotated each frame.
-    root.addChild(legs, body, bar);
-    root.scale.set(1.6);
+    root.addChild(body, bar);
+    root.scale.set(SURFACE_PX);
     this.view.addChild(root);
-    return { root, legs, bar, x: s.x, y: s.y, heading: s.heading, phase: 0, target: s };
-  }
-
-  private drawLegs(g: Graphics, phase: number, walking: boolean, state: number): void {
-    g.clear();
-    const crouch = state === SpiderState.Lurk || state === SpiderState.Eat ? 0.8 : 1;
-    for (let side = -1; side <= 1; side += 2) {
-      for (let i = 0; i < 4; i++) {
-        // Legs fan from front (i=0) to back (i=3); alternate legs swing in antiphase.
-        const base = 0.9 - i * 0.55;
-        const baseX = 7 - i * 4.5;
-        const swing = walking ? Math.sin(phase + (i + (side > 0 ? 0 : 1)) * Math.PI) * 0.35 : 0;
-        const a = side * (Math.PI / 2 - base * 0.9 + swing);
-        const knee = 15 * crouch;
-        const kx = baseX + Math.cos(a) * knee * 0.7;
-        const ky = side * Math.abs(Math.sin(a)) * knee * 0.9 + (side > 0 ? -2 : 2);
-        const tx = baseX + Math.cos(a) * 24 * crouch;
-        const ty = side * Math.abs(Math.sin(a)) * 22 * crouch;
-        g.moveTo(baseX, side * 3)
-          .lineTo(kx, ky)
-          .lineTo(tx, ty);
-      }
-    }
-    g.stroke({ color: LEG, width: 2, cap: 'round', join: 'round' });
+    return { root, body, bar, x: s.x, y: s.y, heading: s.heading, phase: 0, target: s };
   }
 
   private drawBar(g: Graphics, s: SpiderInfo, heading: number): void {
     g.clear();
     if (s.hp >= s.maxHp - 0.01) return;
     g.rotation = -heading;
-    g.scale.set(1 / 1.6);
     const f = Math.max(0, s.hp / s.maxHp);
-    g.roundRect(-BAR_W / 2, -30, BAR_W, 5, 2).fill({ color: 0x000000, alpha: 0.6 });
-    g.roundRect(-BAR_W / 2, -30, BAR_W * f, 5, 2).fill(
+    g.rect(-BAR_W / 2 - 1, -27, BAR_W + 2, 5).fill(0x000000);
+    g.rect(-BAR_W / 2, -26, Math.round(BAR_W * f), 3).fill(
       f > 0.5 ? 0x6fcf5a : f > 0.3 ? 0xe8c547 : 0xe0523a,
     );
   }

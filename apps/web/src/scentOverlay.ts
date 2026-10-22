@@ -1,14 +1,9 @@
 import { Sprite, Texture } from 'pixi.js';
 import type { Container } from 'pixi.js';
-import type { PheromoneSnapshot, PheromoneType } from '@ant/shared';
+import type { PheromoneSnapshot } from '@ant/shared';
 
-/** RGB per layer, packed as [r, g, b]. */
-const COLORS: Partial<Record<PheromoneType, readonly [number, number, number]>> = {
-  food: [255, 190, 40],
-  home: [70, 170, 255],
-  alarm: [255, 70, 70],
-  enemy: [220, 70, 255],
-};
+import type { Art } from './art';
+
 const MAX_ALPHA = 0.85;
 
 /**
@@ -28,7 +23,11 @@ export class ScentOverlay {
   minIntervalMs = 0;
   private lastPaint = -Infinity;
 
-  constructor(parent: Container, worldSize: number) {
+  constructor(
+    parent: Container,
+    worldSize: number,
+    private readonly art: Art,
+  ) {
     this.worldSize = worldSize;
     this.view = new Sprite();
     this.view.visible = false;
@@ -53,7 +52,8 @@ export class ScentOverlay {
     const px = this.pixels!;
     const n = res * res;
     const layers = p.types.length;
-    const rgb = p.types.map((t) => COLORS[t] ?? [255, 255, 255]);
+    const scent = this.art.palette.scent;
+    const rgb = p.types.map((t) => scent[t] ?? ([255, 255, 255] as const));
     for (let i = 0; i < n; i++) {
       let r = 0;
       let g = 0;
@@ -89,7 +89,7 @@ export class ScentOverlay {
     this.pixels = new Uint32Array(this.image.data.buffer);
     this.texture?.destroy(true);
     this.texture = Texture.from(this.canvas, true);
-    this.texture.source.scaleMode = 'linear';
+    this.texture.source.scaleMode = 'nearest';
     this.view.texture = this.texture;
     this.view.width = this.worldSize;
     this.view.height = this.worldSize;
