@@ -5,6 +5,8 @@ import type {
   CombatConfig,
   PheromoneType,
   RainConfig,
+  LawnmowerConfig,
+  YardStepsConfig,
   SpiderConfig,
 } from './types';
 
@@ -198,4 +200,37 @@ export const DEFAULT_RAIN: Readonly<RainConfig> = {
   drownDamage: 0.1,
   broodLevel: 0.25,
   broodKill: 0.003,
+};
+
+/** Lawnmower: every 5-9 minutes, 1-3 passes of a 140 unit swath at ~7 world units per tick. */
+export const DEFAULT_LAWNMOWER: Readonly<LawnmowerConfig> = {
+  enabled: true,
+  frequency: 1,
+  minGap: 6000,
+  maxGap: 10800,
+  warningTicks: 200,
+  width: 140,
+  speed: 7,
+  minPasses: 1,
+  maxPasses: 3,
+  turnTicks: 40,
+  smallFood: 80,
+  bigFoodLoss: 0.3,
+};
+
+/** Yard footsteps: a human crosses the yard every 3-6 minutes, 7-12 large footfalls. */
+export const DEFAULT_YARD_STEPS: Readonly<YardStepsConfig> = {
+  enabled: true,
+  frequency: 1,
+  minGap: 3600,
+  maxGap: 7200,
+  warningTicks: 120,
+  minFeet: 7,
+  maxFeet: 12,
+  stride: 120,
+  strideTicks: 14,
+  offset: 38,
+  radius: 56,
+  shadowTicks: 36,
+  showTicks: 12,
 };

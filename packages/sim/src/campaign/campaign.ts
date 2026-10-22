@@ -191,6 +191,10 @@ export class Campaign {
       spiders: def.spider ? 1 : 0,
       antlions: def.antlion ? 1 : 0,
       rain: { enabled: !room },
+      // Yard patches get the mower and a walking human at their own frequency; rooms have the
+      // campaign's house footsteps instead.
+      lawnmower: { enabled: def.mower > 0, frequency: def.mower || 1 },
+      yardSteps: { enabled: def.walkers > 0, frequency: def.walkers || 1 },
       winLose: false,
       colony: { casteRatio: { ...this.s.casteRatio } },
       ...(this.s.maxAnts > 0 ? { maxAnts: this.s.maxAnts } : {}),

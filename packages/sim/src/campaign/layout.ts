@@ -35,6 +35,12 @@ export interface PatchDef {
   /** The detailed world has a spider / an antlion pit. */
   spider: boolean;
   antlion: boolean;
+  /**
+   * How often the lawnmower / a walking human visits the detailed world (frequency
+   * multipliers; 0 = never, as in the house rooms, which have their own footsteps).
+   */
+  mower: number;
+  walkers: number;
 }
 
 /** All 54 patches: yard ids `row * YARD_COLS + col`, then the rooms. Deterministic per seed. */
@@ -56,6 +62,8 @@ export function buildLayout(seed: number): PatchDef[] {
         piles: 4 + rng.int(3),
         spider: rng.next() < 0.3,
         antlion: rng.next() < 0.25,
+        mower: 0,
+        walkers: 0,
       });
     }
   }
@@ -72,7 +80,16 @@ export function buildLayout(seed: number): PatchDef[] {
       piles: room.rich ? 2 : 1,
       spider: false,
       antlion: false,
+      mower: 0,
+      walkers: 0,
     });
+  }
+  // Separate stream, so adding hazards never shifts the layout above.
+  for (const def of defs) {
+    if (def.kind === 'room') continue;
+    const h = createRng(def.seed ^ 0x6d0e7);
+    def.mower = h.next() < 0.2 ? 0 : Math.round(h.range(0.5, 1.6) * 100) / 100;
+    def.walkers = h.next() < 0.2 ? 0 : Math.round(h.range(0.5, 1.6) * 100) / 100;
   }
   return defs;
 }
