@@ -37,7 +37,24 @@ import { haptics } from './platform/haptics';
 import { PerfGovernor } from './platform/perfGovernor';
 import { initNativeShell } from './platform/nativeShell';
 import { PROFILES, type DeviceTier, type PerfProfile } from './platform/deviceTier';
-import { Menu, type NewCampaignOptions, type NewGameOptions } from './ui/menu';
+import { Menu, type MenuEntry, type NewCampaignOptions, type NewGameOptions } from './ui/menu';
+import {
+  DailyStore,
+  buildDailyScreen,
+  dailyConfig,
+  describeAttempt,
+  shareResult,
+  shareText,
+  type DailyAttempt,
+  type DailySetup,
+} from './daily';
+import {
+  GameArchive,
+  ReplayViewer,
+  buildReplayScreen,
+  getReplayStore,
+  type ArchiveResult,
+} from './replay';
 import type { SandboxOptions } from './sandbox/config';
 import { SandboxUi } from './sandbox/sandboxUi';
 import { sandboxConfig } from './sandbox/config';
@@ -135,7 +152,7 @@ async function main(): Promise<void> {
   const audio = createAudio(settings);
   bindMuteButton(document.getElementById('mute')!, settings);
   /** `menu`: ambient backdrop behind the main menu; `playing`: a real game (maybe paused). */
-  let mode: 'menu' | 'playing' = 'menu';
+  let mode: 'menu' | 'playing' | 'replay' = 'menu';
   let backdropFrozen = false;
   let rockCount = 0;
   let pendingTutorial = false;
@@ -145,6 +162,7 @@ async function main(): Promise<void> {
     sandbox?: SandboxOptions;
     campaign?: boolean;
     yardHazards?: boolean;
+    daily?: DailySetup;
   } = {
     seed: 0,
     difficulty,
@@ -273,13 +291,26 @@ async function main(): Promise<void> {
     });
   }
   const sim = new SimClient({
-    onReady(config, tuning, campaignInfo) {
+    onReady(config, tuning, campaignInfo, replayInfo) {
+      if (replayInfo) {
+        // A replay viewer replaces whatever was running.
+        mode = 'replay';
+        menu.close();
+        syncMenuClasses();
+        tutorial.stop();
+        pendingTutorial = false;
+        setPausedUi(false);
+        playerInput.setFollow(false);
+        setScent(false);
+      } else if (viewer.active) {
+        viewer.stop();
+      }
       game = buildScene(config);
       campaign.attach(world, config, campaignInfo);
       rockCount = 0;
       sandbox.attachScene();
-      sandbox.setGame(config, tuning);
-      syncSandboxHud(config);
+      sandbox.setGame(replayInfo ? { ...config, sandbox: false } : config, tuning);
+      if (!replayInfo) syncSandboxHud(config);
       // A new or loaded game: the autosave clock restarts at its first snapshot.
       latest = null;
       lastAutosaveTick = -1;
@@ -296,11 +327,14 @@ async function main(): Promise<void> {
       }
       colonyPanel.reset();
       camera.focus(config.worldSize / 2, config.worldSize / 2, 1);
+      if (replayInfo) viewer.start(replayInfo);
       if (debug && !tuningMounted) {
         tuningMounted = true;
         mountWarControls(mountTuningPanel(sim, config.behavior));
       }
     },
+    onReplayStatus: (tick, _target, seeking) => viewer.onStatus(tick, seeking),
+    onReplayDesync: (tick) => viewer.onDesync(tick),
     onSnapshot(snapshot, speed, simMs) {
       const g = game;
       if (!g) return;
@@ -350,6 +384,7 @@ async function main(): Promise<void> {
         camera.focus(home.x, home.y, 1);
       }
       latest = snapshot;
+      if (mode === 'replay') viewer.onSnapshot(snapshot.tick);
       audio.director.onSnapshot(snapshot, audioContext());
       if (snapshot.pheromones) g.scent.update(snapshot.pheromones);
       for (const ev of snapshot.events) {
@@ -408,8 +443,10 @@ async function main(): Promise<void> {
       }
       if (snapshot.winner !== -1 && !g.over) {
         g.over = true;
-        tutorial.stop(true);
-        showGameOver(snapshot, g);
+        if (mode !== 'replay') {
+          tutorial.stop(true);
+          showGameOver(snapshot, g);
+        }
       }
       warnIntruders(snapshot);
     },
@@ -418,7 +455,7 @@ async function main(): Promise<void> {
     const r = host.getBoundingClientRect();
     const c = toWorld(r.left + r.width / 2, r.top + r.height / 2);
     return {
-      mode,
+      mode: mode === 'menu' ? 'menu' : 'playing',
       layer,
       paused: paused || menu.isOpen,
       zoom: camera.zoom,
@@ -444,7 +481,7 @@ async function main(): Promise<void> {
     send: (commands) => sim.sendCommands(commands),
     toWorld,
     // Taps only steer the player on the surface view, and not while placing food or painting.
-    toolActive: () => placing || sandbox.toolMode || layer !== 0,
+    toolActive: () => placing || sandbox.toolMode || layer !== 0 || mode === 'replay',
     onTarget: (x, y) => game?.marker.showTarget(x, y),
     keysEnabled: () => mode === 'playing' && !menu.isOpen,
     // Debug only: long-press the ground to drop a food pile (the sandbox tool arrives later).
@@ -513,7 +550,7 @@ async function main(): Promise<void> {
     }
     const pos = g.ants.playerPos.valid ? g.ants.playerPos : null;
     g.marker.update(pos, playerNow?.heading ?? 0, playerNow?.carrying ?? false, camera.zoom);
-    if (pos && playerInput.follow && mode === 'playing') camera.centerOn(pos.x, pos.y);
+    if (pos && playerInput.follow && mode !== 'menu') camera.centerOn(pos.x, pos.y);
   });
 
   // Layer switch: HUD button, Tab, or tapping a nest entrance on the surface.
@@ -588,6 +625,8 @@ async function main(): Promise<void> {
     notify: (msg) => playerInput.toast(msg),
     onLoaded: () => {
       setPausedUi(false);
+      // The loaded game is recorded from its saved state.
+      archive.begin();
     },
   });
   let lastAutosaveTick = -1;
@@ -681,6 +720,82 @@ async function main(): Promise<void> {
     playerInput.toast(`Red ants are raiding your nest! (${intruders})`);
   };
 
+  // Replays and the daily challenge.
+  const replayStore = getReplayStore();
+  const dailyStore = new DailyStore();
+  const archive = new GameArchive(sim, replayStore, dailyStore);
+  /** Current daily attempt number, for the e2e hook. */
+  let dailyAttempt = 0;
+  const viewer = new ReplayViewer({
+    setPaused: (p) => {
+      setPausedUi(p);
+      sim.setPaused(p);
+    },
+    setSpeed: (s) => sim.setSpeed(s),
+    seek: (tick) => sim.replaySeek(tick),
+    setFollow: (on) => playerInput.setFollow(on),
+    exit: () => startBackdrop(),
+  });
+  /** End the current game's recording: store its replay and (daily) its result. */
+  function archiveGame(): Promise<ArchiveResult> {
+    const s = latest;
+    const done = archive.end(
+      mode === 'playing' && s
+        ? {
+            tick: s.tick,
+            winner: s.winner,
+            population: s.colonies[PLAYER_COLONY]?.population ?? 0,
+          }
+        : null,
+    );
+    return done.then((result) => {
+      showGameOverExtras(result);
+      return result;
+    });
+  }
+  async function startReplay(bytes: Uint8Array): Promise<void> {
+    void archiveGame();
+    try {
+      await sim.initReplay(bytes);
+    } catch (e) {
+      playerInput.toast(e instanceof Error ? e.message : 'Could not play that replay');
+    }
+  }
+  async function watchStored(id: string): Promise<void> {
+    const bytes = await replayStore.read(id).catch(() => null);
+    if (bytes) await startReplay(bytes);
+    else playerInput.toast('That replay is missing');
+  }
+  function startDaily(setup: DailySetup, attempt: DailyAttempt): void {
+    startGame({
+      difficulty: setup.difficulty,
+      seed: setup.seed,
+      tutorial: false,
+      daily: { setup, attempt },
+    });
+  }
+  const menuEntries: MenuEntry[] = [
+    {
+      label: 'Daily Challenge',
+      build: (ctx) =>
+        buildDailyScreen(ctx, {
+          store: dailyStore,
+          play: startDaily,
+          watch: (id) => void watchStored(id),
+          notify: (msg) => playerInput.toast(msg),
+        }),
+    },
+    {
+      label: 'Replays',
+      build: (ctx) =>
+        buildReplayScreen(ctx, {
+          store: replayStore,
+          watch: (bytes) => void startReplay(bytes),
+          notify: (msg) => playerInput.toast(msg),
+        }),
+    },
+  ];
+
   // Game over modal; "Play again" starts a fresh game with a new seed.
   const modal = document.getElementById('gameover')!;
   const title = document.getElementById('gameover-title')!;
@@ -701,6 +816,7 @@ async function main(): Promise<void> {
     modal.hidden = false;
     setPausedUi(true);
     again.focus();
+    void archiveGame();
   };
   const campaign = new CampaignUi({
     send: (action) => sim.campaignAction(action),
@@ -723,6 +839,43 @@ async function main(): Promise<void> {
   });
   function hideGameOver(): void {
     modal.hidden = true;
+    extra.hidden = true;
+    extra.replaceChildren();
+  }
+  const extra = document.getElementById('gameover-extra')!;
+  /** Game-over extras: the daily result with Share, and Watch replay. */
+  function showGameOverExtras(result: ArchiveResult): void {
+    if (modal.hidden || mode === 'replay') return;
+    const rows: HTMLElement[] = [];
+    const daily = lastConfig.daily;
+    if (daily && result.attempt) {
+      const line = document.createElement('p');
+      line.textContent =
+        `Daily ${daily.date}: ${describeAttempt(result.attempt)}` +
+        (result.attempt.n > 1 ? ' (retry, not counted)' : '');
+      const share = document.createElement('button');
+      share.type = 'button';
+      share.textContent = 'Share result';
+      share.addEventListener('click', () => {
+        void shareResult(shareText(daily.date, result.attempt!)).then((how) =>
+          playerInput.toast(
+            how === 'copied' ? 'Result copied' : how === 'failed' ? 'Could not share' : 'Shared',
+          ),
+        );
+      });
+      rows.push(line, share);
+    }
+    if (result.replayId) {
+      const id = result.replayId;
+      const watch = document.createElement('button');
+      watch.type = 'button';
+      watch.id = 'watch-replay';
+      watch.textContent = 'Watch replay';
+      watch.addEventListener('click', () => void watchStored(id));
+      rows.push(watch);
+    }
+    extra.replaceChildren(...rows);
+    extra.hidden = rows.length === 0;
   }
   again.addEventListener('click', () =>
     lastConfig.campaign
@@ -819,16 +972,19 @@ async function main(): Promise<void> {
     difficulty,
     onNewGame: (options) => startGame(options),
     onResume: () => resume(),
+    entries: menuEntries,
     onRestart: () =>
       lastConfig.campaign
         ? startCampaign({ difficulty: lastConfig.difficulty, seed: lastConfig.seed })
-        : startGame({
-            difficulty: lastConfig.difficulty,
-            seed: lastConfig.seed,
-            tutorial: false,
-            ...(lastConfig.sandbox ? { sandbox: lastConfig.sandbox } : {}),
-            ...(lastConfig.yardHazards === false ? { yardHazards: false } : {}),
-          }),
+        : lastConfig.daily
+          ? startDaily(lastConfig.daily, dailyStore.begin(lastConfig.daily.date))
+          : startGame({
+              difficulty: lastConfig.difficulty,
+              seed: lastConfig.seed,
+              tutorial: false,
+              ...(lastConfig.sandbox ? { sandbox: lastConfig.sandbox } : {}),
+              ...(lastConfig.yardHazards === false ? { yardHazards: false } : {}),
+            }),
     onQuit: () => startBackdrop(),
     onNewCampaign: (options) => startCampaign(options),
     onReplayTutorial: () => {
@@ -858,14 +1014,20 @@ async function main(): Promise<void> {
   };
 
   /** Start (or restart) a real game on the existing Pixi app and worker; no reload. */
-  function startGame(options: NewGameOptions): void {
+  function startGame(
+    options: NewGameOptions & { daily?: { setup: DailySetup; attempt: DailyAttempt } },
+  ): void {
+    void archiveGame();
     mode = 'playing';
+    const daily = options.daily;
     lastConfig = {
       seed: options.seed ?? randomSeed(),
       difficulty: options.difficulty,
       ...(options.sandbox ? { sandbox: options.sandbox } : {}),
       ...(options.yardHazards === false ? { yardHazards: false } : {}),
+      ...(daily ? { daily: daily.setup } : {}),
     };
+    dailyAttempt = daily?.attempt.n ?? 0;
     menu.close();
     syncMenuClasses();
     tutorial.stop();
@@ -873,15 +1035,21 @@ async function main(): Promise<void> {
     latest = null;
     hideGameOver();
     setPausedUi(false);
-    sim.init({
-      seed: lastConfig.seed,
-      difficulty: lastConfig.difficulty,
-      maxAnts: governor.maxAnts,
-      ...(lastConfig.sandbox ? sandboxConfig(lastConfig.sandbox) : {}),
-      ...(lastConfig.yardHazards === false
-        ? { lawnmower: { enabled: false }, yardSteps: { enabled: false } }
-        : {}),
-    });
+    sim.init(
+      daily
+        ? dailyConfig(daily.setup)
+        : {
+            seed: lastConfig.seed,
+            difficulty: lastConfig.difficulty,
+            maxAnts: governor.maxAnts,
+            ...(lastConfig.sandbox ? sandboxConfig(lastConfig.sandbox) : {}),
+            ...(lastConfig.yardHazards === false
+              ? { lawnmower: { enabled: false }, yardSteps: { enabled: false } }
+              : {}),
+          },
+      daily ? { daily: daily.setup.date } : {},
+    );
+    archive.begin(daily ? { date: daily.setup.date, n: daily.attempt.n } : undefined);
     sim.setPaused(false);
     sim.setSpeed(speed);
     playerInput.setFollow(settings.value.followCamera);
@@ -890,6 +1058,9 @@ async function main(): Promise<void> {
 
   /** Start a new campaign: the start patch in detail, the yard map behind it. */
   function startCampaign(options: NewCampaignOptions): void {
+    void archiveGame();
+    archive.clear();
+    dailyAttempt = 0;
     mode = 'playing';
     lastConfig = {
       seed: options.seed ?? randomSeed(),
@@ -916,6 +1087,9 @@ async function main(): Promise<void> {
 
   /** Resume the newest campaign save. */
   function continueCampaign(slot: SaveSlot): void {
+    void archiveGame();
+    archive.clear();
+    dailyAttempt = 0;
     mode = 'playing';
     menu.close();
     syncMenuClasses();
@@ -936,6 +1110,9 @@ async function main(): Promise<void> {
 
   /** Resume the most recent save. */
   function continueGame(): void {
+    void archiveGame();
+    archive.begin();
+    dailyAttempt = 0;
     mode = 'playing';
     menu.close();
     syncMenuClasses();
@@ -955,6 +1132,9 @@ async function main(): Promise<void> {
 
   /** Back to the main menu over a small ambient colony. */
   function startBackdrop(): void {
+    void archiveGame();
+    archive.clear();
+    dailyAttempt = 0;
     mode = 'menu';
     tutorial.stop();
     pendingTutorial = false;
@@ -962,7 +1142,7 @@ async function main(): Promise<void> {
     hideGameOver();
     setPausedUi(false);
     setScent(false);
-    sim.init({ seed: randomSeed(), colonies: 1, initialAnts: 40, difficulty });
+    sim.init({ seed: randomSeed(), colonies: 1, initialAnts: 40, difficulty }, { record: false });
     sim.setPaused(false);
     sim.setSpeed(1);
     refreshContinue();
@@ -992,6 +1172,8 @@ async function main(): Promise<void> {
     } else if (menu.isOpen) {
       if (!menu.back() && native) void App.exitApp().catch(() => {});
       syncMenuClasses();
+    } else if (mode === 'replay') {
+      startBackdrop();
     } else if (mode === 'playing' && modal.hidden) {
       // Back from the nest view returns to the surface before it opens the pause menu.
       if (layer === 1) setLayer(0);
@@ -1043,6 +1225,11 @@ async function main(): Promise<void> {
         rocks: rockCount,
         speed,
         audio: audio.backend.debugState(),
+        replay: mode === 'replay' ? { tick: latest?.tick ?? -1, end: viewer.endTick } : null,
+        daily:
+          dailyAttempt && lastConfig.daily
+            ? { date: lastConfig.daily.date, attempt: dailyAttempt }
+            : null,
         campaign: campaign.state && {
           active: campaign.state.active,
           owned: campaign.state.owned,
@@ -1080,6 +1267,7 @@ async function main(): Promise<void> {
     if (lastAutosaveTick < 0) lastAutosaveTick = s.tick;
     else if (s.tick - lastAutosaveTick >= AUTOSAVE_TICKS) autosave();
     nestSwitch.hidden = layer === 0 || !enemyNestKnown();
+    if (mode === 'replay' && !playerInput.follow) viewer.followCleared();
     audio.director.idle(audioContext());
   }, 250);
 }

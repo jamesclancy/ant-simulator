@@ -1,0 +1,52 @@
+.daily-card {
+  padding: 12px;
+  border-radius: 12px;
+  background: #2c3b2c;
+}
+.daily-card h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  color: #ffd84a;
+}
+.daily-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px 12px;
+}
+.daily-stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+}
+.daily-official {
+  margin: 6px 0 0;
+  font-weight: 600;
+}
+.daily-tries,
+.daily-history {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+}
+.daily-history {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.daily-history li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+#gameover-extra {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+#gameover-extra[hidden] {
+  display: none;
+}

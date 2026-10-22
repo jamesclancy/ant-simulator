@@ -794,7 +794,14 @@ export type CampaignAction =
 
 /** Main thread -> worker. */
 export type WorkerInMessage =
-  | { type: 'init'; config: SimConfigInput }
+  | {
+      type: 'init';
+      config: SimConfigInput;
+      /** Record the game for a replay (default true); the menu backdrop turns it off. */
+      record?: boolean;
+      /** UTC date `YYYY-MM-DD` when this game is that day's daily challenge. */
+      daily?: string;
+    }
   | { type: 'commands'; commands: Command[] }
   | { type: 'setPaused'; paused: boolean }
   | { type: 'setSpeed'; speed: number }
@@ -807,7 +814,23 @@ export type WorkerInMessage =
   /** Start a new campaign (replaces any running game); answered like `init`. */
   | { type: 'initCampaign'; config: CampaignConfig }
   /** A campaign action (ignored outside campaigns). Entering a patch answers with `ready`. */
-  | { type: 'campaign'; action: CampaignAction };
+  | { type: 'campaign'; action: CampaignAction }
+  /** Encode the running game's replay; answered with `replay` (or `error`). */
+  | { type: 'getReplay'; requestId: number }
+  /** Replace the sim with a replay viewer on the given replay file; answered like `load`. */
+  | { type: 'initReplay'; requestId: number; bytes: Uint8Array }
+  /** Replay viewer: jump to a tick (restores the nearest checkpoint, then fast-forwards). */
+  | { type: 'replaySeek'; tick: number };
+
+/** What the replay viewer needs to know about the replay it is showing. */
+export interface ReplayStart {
+  startTick: number;
+  endTick: number;
+  /** Recorded by a different sim version: playback may differ from the original game. */
+  versionMismatch: boolean;
+  sandbox: boolean;
+  daily?: string;
+}
 
 /** Worker -> main thread. */
 export type WorkerOutMessage =
@@ -819,6 +842,8 @@ export type WorkerOutMessage =
       /** Set when this is the answer to a `load`. */ requestId?: number;
       /** Present in campaign games: the overview (the active patch's kind decides its look). */
       campaign?: CampaignSnapshot;
+      /** Present when the worker is running a replay viewer. */
+      replay?: ReplayStart;
     }
   | {
       type: 'snapshot';
@@ -828,10 +853,15 @@ export type WorkerOutMessage =
       simMs?: number | undefined;
     }
   | { type: 'saved'; requestId: number; bytes: Uint8Array; info: SaveInfo }
+  | { type: 'replay'; requestId: number; bytes: Uint8Array }
+  /** Replay viewer: a seek is in progress (`seeking`) or just finished. */
+  | { type: 'replayStatus'; tick: number; target: number; seeking: boolean }
+  /** Replay viewer: the re-run stopped matching the recording at `tick`. */
+  | { type: 'replayDesync'; tick: number; expected: number; actual: number }
   | {
       type: 'error';
       requestId: number;
-      operation: 'save' | 'load';
+      operation: 'save' | 'load' | 'replay';
       /** `SaveError.code` for load failures, else 'failed'. */
       code: string;
       message: string;

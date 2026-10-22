@@ -2,7 +2,7 @@ import type { Command } from '@ant/shared';
 
 /** Snapshot of game state exposed to the e2e suite via `window.__antDebug` (dev/e2e builds). */
 export interface AntDebugState {
-  mode: 'menu' | 'playing';
+  mode: 'menu' | 'playing' | 'replay';
   paused: boolean;
   layer: 0 | 1;
   tick: number;
@@ -28,6 +28,10 @@ export interface AntDebugState {
     feet: number;
     kind: 'yard' | 'room';
   } | null;
+  /** Replay viewer: tick being shown (null outside replays). */
+  replay: { tick: number; end: number } | null;
+  /** Daily challenge game in progress: its date and attempt number. */
+  daily: { date: string; attempt: number } | null;
   /** Audio engine probe: context state ('none' until the first gesture), active voices, music. */
   audio: {
     context: string;
