@@ -32,7 +32,8 @@ jobs:
 
   e2e:
     name: e2e
-    runs-on: ubuntu-latest
+    # Pinned: Playwright's WebKit build links against 24.04's libicu74, which ubuntu-latest (26.04) lacks.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -44,12 +45,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Resolve Playwright version
         id: pw
-        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+          echo "os=$(. /etc/os-release && echo "$ID$VERSION_ID")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v6
         id: pw-cache
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+          # Browser builds are distro-specific, so a runner image upgrade must miss the cache.
+          key: playwright-${{ steps.pw.outputs.os }}-${{ steps.pw.outputs.version }}
       - name: Install browsers
         if: steps.pw-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium webkit
