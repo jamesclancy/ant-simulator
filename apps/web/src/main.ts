@@ -474,7 +474,6 @@ async function main(): Promise<void> {
     const r = host.getBoundingClientRect();
     return world.toLocal({ x: cx - r.left, y: cy - r.top });
   };
-  let placing = false;
   const sandbox = new SandboxUi({
     host,
     world,
@@ -488,8 +487,8 @@ async function main(): Promise<void> {
     host,
     send: (commands) => sim.sendCommands(commands),
     toWorld,
-    // Taps only steer the player on the surface view, and not while placing food or painting.
-    toolActive: () => placing || sandbox.toolMode || layer !== 0 || mode === 'replay',
+    // Taps only steer the player on the surface view, and not while painting.
+    toolActive: () => sandbox.toolMode || layer !== 0 || mode === 'replay',
     onTarget: (x, y) => game?.marker.showTarget(x, y),
     keysEnabled: () => mode === 'playing' && !menu.isOpen,
     // Debug only: long-press the ground to drop a food pile (the sandbox tool arrives later).
@@ -598,11 +597,6 @@ async function main(): Promise<void> {
     app.renderer.background.color = next === 0 ? SURFACE_BACKGROUND : NEST_BACKGROUND;
     layerBtn.textContent = next === 0 ? 'Nest' : 'Surface';
     layerBtn.setAttribute('aria-label', next === 0 ? 'Show nest' : 'Show surface');
-    if (next === 1) {
-      placing = false;
-      foodTool.setAttribute('aria-pressed', 'false');
-    }
-    foodTool.hidden = next === 1 || sandbox.isActive;
     scentBtn.hidden = next === 1;
     nestSwitch.hidden = next === 0 || !enemyNestKnown();
   };
@@ -686,7 +680,7 @@ async function main(): Promise<void> {
     for (const { s, b } of speedButtons) b.setAttribute('aria-pressed', String(s === speed));
   };
   refresh();
-  /** Sandbox-only HUD changes: the 8x speed step, and the toolbar replaces Place food. */
+  /** Sandbox-only HUD changes: the 8x speed step. */
   function syncSandboxHud(config: SimConfig): void {
     for (const { s, b } of speedButtons) b.hidden = s > 4 && !config.sandbox;
     if (!config.sandbox && speed > 4) {
@@ -694,18 +688,8 @@ async function main(): Promise<void> {
       sim.setSpeed(speed);
       refresh();
     }
-    foodTool.hidden = layer === 1 || config.sandbox;
-    if (config.sandbox) {
-      placing = false;
-      foodTool.setAttribute('aria-pressed', 'false');
-    }
   }
-  // Place-food tool: when on, a tap/click (not a drag) places a pile at that world point.
-  const foodTool = document.getElementById('place-food')!;
-  foodTool.addEventListener('click', () => {
-    placing = !placing;
-    foodTool.setAttribute('aria-pressed', String(placing));
-  });
+  // A tap/click (not a drag) on an entrance opens that nest.
   let down: { x: number; y: number } | null = null;
   host.addEventListener('pointerdown', (e) => {
     down = { x: e.clientX, y: e.clientY };
@@ -716,19 +700,15 @@ async function main(): Promise<void> {
     if (!d || layer !== 0 || sandbox.toolMode) return;
     if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6) return;
     const p = toWorld(e.clientX, e.clientY);
-    if (!placing) {
-      // Tapping an entrance opens that nest (the red one only once it has been found).
-      for (const c of latest?.colonies ?? []) {
-        const n = c.nest;
-        if (Math.hypot(p.x - n.x, p.y - n.y) > n.radius * 1.6) continue;
-        if (c.id !== PLAYER_COLONY && !enemyNestKnown()) continue;
-        viewNest = c.id;
-        setLayer(1);
-        return;
-      }
+    // The red entrance only opens once it has been found.
+    for (const c of latest?.colonies ?? []) {
+      const n = c.nest;
+      if (Math.hypot(p.x - n.x, p.y - n.y) > n.radius * 1.6) continue;
+      if (c.id !== PLAYER_COLONY && !enemyNestKnown()) continue;
+      viewNest = c.id;
+      setLayer(1);
       return;
     }
-    sim.sendCommands([{ type: 'placeFood', x: p.x, y: p.y, amount: 200 }]);
   });
 
   // Nest raid warning, at most every 10 s.
