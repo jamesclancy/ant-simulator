@@ -277,3 +277,58 @@ body.in-nest #joystick {
     outline-color: #2a1604;
   }
 }
+
+.ant-chatter {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* Positioned by its tail: the wrapper sits on the ant, the bubble grows up and centred. */
+.ant-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: max-content;
+  max-width: 180px;
+  translate: -50% -100%;
+  transform-origin: 50% 100%;
+  padding: 3px 7px 4px;
+  background: #fff8e2;
+  color: #2a1a08;
+  font: 13px/1.2 var(--font, system-ui, sans-serif);
+  text-align: center;
+  box-shadow:
+    0 0 0 2px #2a1a08,
+    2px 3px 0 2px rgb(0 0 0 / 0.25);
+  animation: ant-bubble-pop 0.18s steps(3, end);
+}
+.ant-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 8px;
+  height: 7px;
+  margin-left: -4px;
+  background: #2a1a08;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.ant-bubble.rival {
+  background: #ffe3d8;
+  box-shadow:
+    0 0 0 2px var(--c1, #d03a22),
+    2px 3px 0 2px rgb(0 0 0 / 0.25);
+}
+.ant-bubble.rival::after {
+  background: var(--c1, #d03a22);
+}
+@keyframes ant-bubble-pop {
+  from {
+    scale: 0.4;
+    opacity: 0;
+  }
+}
+.reduce-motion .ant-bubble {
+  animation: none;
+}

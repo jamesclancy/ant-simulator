@@ -563,6 +563,7 @@ export class Menu {
         | 'followCamera'
         | 'reduceMotion'
         | 'foodArrows'
+        | 'antChatter'
         | 'showFps'
         | 'haptics'
         | 'batterySaver'
@@ -641,6 +642,7 @@ export class Menu {
       paletteChoice(),
       toggle('Reduce motion', 'reduceMotion'),
       toggle('Food arrows', 'foodArrows'),
+      toggle('Ant chatter', 'antChatter'),
       toggle('Show FPS', 'showFps'),
       toggle('Battery saver (30 fps)', 'batterySaver'),
       toggle('Haptics', 'haptics'),

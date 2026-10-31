@@ -18,6 +18,8 @@ import { Camera } from './camera';
 import { ScentOverlay } from './scentOverlay';
 import { WorldLayer } from './worldLayer';
 import { FoodArrows, PICKUP_REACH } from './foodArrows';
+import { Chatter, type ChatterSource } from './dialogue/chatter';
+import { SpeechBubbles } from './dialogue/bubbles';
 import { SimClient } from './simClient';
 import { pauseWhenBackgrounded } from './lifecycle';
 import { bindSaves, hasSave, loadLatest, type SaveSlot } from './save';
@@ -144,6 +146,8 @@ async function main(): Promise<void> {
   await settings.load();
   const foodArrows = new FoodArrows(host);
   foodArrows.setEnabled(settings.value.foodArrows);
+  const chatter = new Chatter();
+  const bubbles = new SpeechBubbles(host);
   bindDocumentSettings(settings);
   const art = new Art(settings.value.palette);
   bindPaletteCss(art);
@@ -392,6 +396,7 @@ async function main(): Promise<void> {
         camera.focus(home.x, home.y, 1);
       }
       latest = snapshot;
+      chatter.onSnapshot(snapshot, performance.now());
       if (mode === 'replay') viewer.onSnapshot(snapshot.tick);
       audio.director.onSnapshot(snapshot, audioContext());
       if (snapshot.pheromones) g.scent.update(snapshot.pheromones);
@@ -531,6 +536,12 @@ async function main(): Promise<void> {
     }
     camera.snapToPixels();
     nestCamera.snapToPixels();
+    /** Ant small talk over whichever view is showing (after its ants have been drawn). */
+    const talk = (source: ChatterSource | undefined): void => {
+      const on = settings.value.antChatter && mode !== 'menu' && !menu.isOpen;
+      const size = { w: host.clientWidth, h: host.clientHeight };
+      bubbles.update(chatter.tick(now, (on && source) || null, size, !paused));
+    };
     if (mode === 'menu') {
       // Slow drift around the home nest behind the menu.
       const nest = latest?.colonies[PLAYER_COLONY]?.nest;
@@ -543,6 +554,7 @@ async function main(): Promise<void> {
     if (layer !== 0) {
       foodArrows.update([], { x: 0, y: 0, zoom: 1 }, { w: 0, h: 0 }, false);
       g.nests[viewNest]?.ants.update();
+      talk(g.nests[viewNest]?.ants);
       return;
     }
     g.worldLayer.tick(now, camera.zoom);
@@ -570,6 +582,7 @@ async function main(): Promise<void> {
     const pos = g.ants.playerPos.valid ? g.ants.playerPos : null;
     g.marker.update(pos, playerNow?.heading ?? 0, playerNow?.carrying ?? false, camera.zoom);
     if (pos && playerInput.follow && mode !== 'menu') camera.centerOn(pos.x, pos.y);
+    talk(g.ants);
   });
 
   // Layer switch: HUD button, Tab, or tapping a nest entrance on the surface.
