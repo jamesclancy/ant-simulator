@@ -11,6 +11,7 @@ import {
 } from '@ant/shared';
 import type { Snapshot } from '@ant/shared';
 import type { Art } from './art';
+import type { ChatterSource } from './dialogue/chatter';
 import { STATE_INDEX } from './art/sprites/ants';
 import type { AntSet } from './art/sprites/ants';
 import { SURFACE_PX } from './art/sprites/world';
@@ -36,7 +37,7 @@ const RECRUIT_TINT = 0xffe08a;
  * and latest snapshot and interpolates between them using wall-clock time since the latest snapshot arrived.
  * Each ant is one particle whose texture is swapped between walk, carry and fight frames.
  */
-export class AntLayer {
+export class AntLayer implements ChatterSource {
   readonly view: ParticleContainer;
   private frames: Texture[][][][];
   private clock = 0;
@@ -48,7 +49,7 @@ export class AntLayer {
   private arrived = performance.now();
   private tickMs = TICK_MS;
   private shown = 0;
-  private playerIndex = -1;
+  private playerIdx = -1;
   private recruitFlags = new Uint8Array(0);
   private recruitIdx: Uint32Array = new Uint32Array(0);
   /** Interpolated position of the player ant after the latest `update()`, if any. */
@@ -76,6 +77,43 @@ export class AntLayer {
     this.animate = animate;
   }
 
+  get count(): number {
+    return this.currCount;
+  }
+
+  get data(): Float32Array {
+    return this.curr;
+  }
+
+  get playerIndex(): number {
+    return this.playerIdx;
+  }
+
+  get underground(): boolean {
+    return this.layer !== 0;
+  }
+
+  get pixelSize(): number {
+    return this.view.worldTransform.a * this.scale;
+  }
+
+  /** Where ant `i` was drawn by the last `update()`, in canvas CSS px. */
+  screenAt(i: number, out: { x: number; y: number }): boolean {
+    let x: number;
+    let y: number;
+    if (i === this.playerIdx && this.playerPos.valid) {
+      ({ x, y } = this.playerPos);
+    } else {
+      const p = this.view.particleChildren[i] as Particle | undefined;
+      if (!p || p.alpha === 0 || i >= this.currCount) return false;
+      ({ x, y } = p);
+    }
+    const t = this.view.worldTransform;
+    out.x = t.a * x + t.c * y + t.tx;
+    out.y = t.b * x + t.d * y + t.ty;
+    return true;
+  }
+
   setStride(stride: number): void {
     this.stride = Math.max(1, Math.floor(stride));
   }
@@ -94,7 +132,7 @@ export class AntLayer {
   private trackPlayer(snapshot: Snapshot): void {
     for (const i of this.recruitIdx) this.recruitFlags[i] = 0;
     const p = snapshot.player;
-    this.playerIndex = p ? p.index : -1;
+    this.playerIdx = p ? p.index : -1;
     this.recruitIdx = p ? p.recruitedIndices : new Uint32Array(0);
     if (this.recruitFlags.length < snapshot.antCount) {
       this.recruitFlags = new Uint8Array(Math.ceil(snapshot.antCount * 1.5));
@@ -133,7 +171,7 @@ export class AntLayer {
     for (let i = 0; i < n; i++) {
       const o = i * ANT_STRIDE;
       const p = list[i]!;
-      if (stride > 1 && i % stride !== 0 && i !== this.playerIndex && !this.recruitFlags[i]) {
+      if (stride > 1 && i % stride !== 0 && i !== this.playerIdx && !this.recruitFlags[i]) {
         p.alpha = 0;
         continue;
       }
@@ -183,7 +221,7 @@ export class AntLayer {
       p.tint = this.recruitFlags[i] ? RECRUIT_TINT : 0xffffff;
     }
     this.playerPos.valid = false;
-    const pi = this.playerIndex;
+    const pi = this.playerIdx;
     if (this.layer === 0 && pi >= 0 && pi < n) {
       const p = list[pi]!;
       // The player is drawn by PlayerMarker (bigger, yellow); hide its particle.
