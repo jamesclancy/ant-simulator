@@ -7,7 +7,7 @@
     "@ant/shared": "workspace:*",
     "@ant/sim": "workspace:*",
     "@capacitor/app": "^8.1.0",
-    "@capacitor/core": "^8.5.3",
+    "@capacitor/core": "^8.6.0",
     "@capacitor/filesystem": "^8.1.5",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/preferences": "^8.0.1",
