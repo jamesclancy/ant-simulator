@@ -10,12 +10,12 @@
     "assets": "capacitor-assets generate --ios --android --iconBackgroundColor \"#3f6a2e\" --iconBackgroundColorDark \"#1d3316\" --splashBackgroundColor \"#1d3316\" --splashBackgroundColorDark \"#1d3316\""
   },
   "dependencies": {
-    "@capacitor/android": "^8.5.3",
+    "@capacitor/android": "^8.6.0",
     "@capacitor/app": "^8.1.2",
-    "@capacitor/core": "^8.5.3",
+    "@capacitor/core": "^8.6.0",
     "@capacitor/filesystem": "^8.1.5",
     "@capacitor/haptics": "^8.0.2",
-    "@capacitor/ios": "^8.5.3",
+    "@capacitor/ios": "^8.6.0",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/status-bar": "^8.0.4"
   },
